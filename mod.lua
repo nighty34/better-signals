@@ -4,8 +4,8 @@ local signals = require "nightfury/signals/main"
 function data()
 	return {
 		info = {
-			description = _("sbb_type_n_name_desc"),
-			name = _("sbb_type_n_name"),
+			description = _("better_signals_desc"),
+			name = _("better_signals_name"),
 			params = {
 				{
 					key = "better_signals_view_distance",
