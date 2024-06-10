@@ -4,8 +4,18 @@ local signals = require "nightfury/signals/main"
 function data()
 	return {
 		info = {
-			description = _("better_signals_desc"),
 			name = _("better_signals_name"),
+			description = _("better_signals_desc"),
+			minorVersion = 0,
+			modid = "nightfury34_better_signals_1",
+			severityAdd = "NONE",
+			severityRemove = "WARNING",
+			authors = {
+				{
+					name = "nightfury34",
+					role = "CREATOR",
+				},
+			},
 			params = {
 				{
 					key = "better_signals_view_distance",
@@ -15,13 +25,6 @@ function data()
 					tooltip = _("better_signals_view_distance_tooltip"),
 					defaultIndex = 15,
 				  },
-			},
-			modid = "nightfury34_type-n_signale_1",
-			authors = {
-				{
-					name = "nightfury34",
-					role = "CREATOR",
-				},
 			},
 		},
 		runFn = function(settings, modParams)
