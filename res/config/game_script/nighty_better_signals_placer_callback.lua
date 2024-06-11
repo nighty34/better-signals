@@ -139,6 +139,8 @@ function data()
 					end
 				end
 
+				utils.removeFromTableByValue(signals.trackedEntities, param.entityId)
+
 			elseif name == "signals.rebuild" then
 				for old, new in pairs(param.matchedObjects) do
 					for key, value in pairs(signals.signalObjects) do
