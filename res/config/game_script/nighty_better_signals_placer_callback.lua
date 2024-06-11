@@ -127,8 +127,8 @@ function data()
 				table.insert(signals.trackedEntities, param.entityId)
 
 			elseif name == "tracking.remove" then
-				for _, value in pairs(signals.signalObjects) do
-					if value.construction == param.entityId then
+				for key, value in pairs(signals.signalObjects) do
+					if value.construction == param.entityId or key == "signal" .. param.entityId then
 						if not signalState.connectedUpdated then
 							signalState.connectedSignal = nil
 							zone.remZone("connectedSignal")
@@ -138,7 +138,6 @@ function data()
 						end
 					end
 				end
-				utils.removeFromTableByValue(signals.trackedEntities, param.entityId)
 
 			elseif name == "signals.rebuild" then
 				for old, new in pairs(param.matchedObjects) do
@@ -176,16 +175,19 @@ function data()
 			end
 			if id == "bulldozer" and name == "builder.apply" then
 				local removeObjects = {}
+				local params = {}
 
 				if param and param.proposal and param.proposal.proposal then
 
 					local toBeRemoved = param.proposal.proposal.edgeObjectsToRemove
 
 					if #toBeRemoved > 0 then
-						for i, value in pairs(toBeRemoved) do
+						for _, value in pairs(toBeRemoved) do
 							table.insert(removeObjects, value)
+							params.entityId = tonumber(value)
+							game.interface.sendScriptEvent("__signalEvent__", "tracking.remove", params)
 						end
-						local params = {}
+						
 						params.remove = removeObjects
 						game.interface.sendScriptEvent("__signalEvent__", "signals.remove", params)
 					end
@@ -199,7 +201,7 @@ function data()
 				end
 				
 				game.interface.sendScriptEvent("__signalEvent__", "signals.reset", {})
-				
+
 			elseif (name == "builder.apply") or (name == "builder.proposalCreate") then
 				local signal_params = getSignal(param)
 				if not signal_params then
@@ -223,7 +225,7 @@ function data()
 				if name == "idAdded" then
 					param.entityId = tonumber(entityId)
 					game.interface.sendScriptEvent("__signalEvent__", "tracking.add", param)
-				elseif name == "window.close" then
+				elseif name == "window.close" or name == "destroy" then
 					param.entityId = tonumber(entityId)
 					game.interface.sendScriptEvent("__signalEvent__", "tracking.remove", param)
 				end
