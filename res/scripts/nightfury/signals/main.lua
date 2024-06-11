@@ -163,7 +163,7 @@ function signals.createSignal(signal, construct, signalType, allowWaypoints)
 		else
 			if pcall(function () 
 				local check = game.interface.upgradeConstruction(oldConstruction.id, oldConstruction.fileName, oldConstruction.params)
-				if check ~= c_signal then
+				if check ~= construct then
 					print("Construction upgrade error")
 				end
 			end) then
