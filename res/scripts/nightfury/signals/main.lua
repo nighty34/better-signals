@@ -149,6 +149,29 @@ function signals.createSignal(signal, construct, signalType, allowWaypoints)
 	signals.signalObjects[signalKey].changed = 0
 	signals.signalObjects[signalKey].type = signalType
 	signals.signalObjects[signalKey].allowWaypoints = allowWaypoints
+
+	local oldConstruction = game.interface.getEntity(construct)
+	if oldConstruction then
+		oldConstruction.params.better_signals_tunnel_helper = 0
+		oldConstruction.params.seed = nil -- important!!
+
+		local proposal = api.type.SimpleProposal.new()
+		proposal.constructionsToRemove = {} -- TODO
+		local pd = api.engine.util.proposal.makeProposalData(proposal, {}) -- can context be something smart?
+		if pd.errorState.critical == true then
+			print(pd.errorState.messages[1] .. " : " .. oldConstruction.fileName)
+		else
+			if pcall(function () 
+				local check = game.interface.upgradeConstruction(oldConstruction.id, oldConstruction.fileName, oldConstruction.params)
+				if check ~= c_signal then
+					print("Construction upgrade error")
+				end
+			end) then
+			else
+				print("Programmical Error during Upgrade")
+			end
+		end
+	end
 end
 
 function signals.removeSignalBySignal(signal)
