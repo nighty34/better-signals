@@ -10,6 +10,8 @@ local signalState = {
 	connectedUpdated = false,
 }
 
+local tempSignalPosTracker = {}
+
 -- Function will analyze params and determine if it's a in the config
 -- registered Signal.
 -- If a signal is detected it returns signal params
@@ -121,6 +123,15 @@ function data()
 						signalState.connectedSignal = string.match(key, "%d+$")
 						zone.markEntity("connectedSignal", tonumber(signalState.connectedSignal), 1, {0, 1, 0, 1})
 						return
+					elseif key == "signal" .. param.entityId then
+						local modelInstance = utils.getComponentProtected(param.entityId, 58)
+						if modelInstance then
+							local transf = modelInstance.fatInstances[1].transf
+							if transf then
+								tempSignalPosTracker["signal" .. param.entityId] = {}
+								tempSignalPosTracker["signal" .. param.entityId].pos = {transf[13], transf[14]}
+							end
+						end
 					end
 				end
 
@@ -147,6 +158,18 @@ function data()
 						if key == old then
 							signals.signalObjects["signal" .. new] = value
 							signals.signalObjects[key] = nil
+						end
+					end
+				end
+			elseif name =="signals.modeSwitch" then
+				for key, value in pairs(signals.signalObjects) do
+					if (key == "signal" .. param.entityId) and (tempSignalPosTracker["signal" .. param.entityId].pos ~= nil) then
+						local possibleSignals = game.interface.getEntities({radius=1.3, pos={tempSignalPosTracker["signal" .. param.entityId].pos[1], tempSignalPosTracker["signal" .. param.entityId].pos[2]}}, { type = "SIGNAL" })
+						if #possibleSignals > 0 then
+							signals.signalObjects["signal" .. param.entityId] = nil
+							signals.signalObjects["signal" .. possibleSignals[1]] = value
+							tempSignalPosTracker["signal" .. param.entityId] = nil
+							return
 						end
 					end
 				end
@@ -230,6 +253,10 @@ function data()
 				elseif name == "window.close" or name == "destroy" then
 					param.entityId = tonumber(entityId)
 					game.interface.sendScriptEvent("__signalEvent__", "tracking.remove", param)
+
+					if name == "destroy" then
+						game.interface.sendScriptEvent("__signalEvent__", "signals.modeSwitch", param)
+					end
 				end
 			end
 		end
