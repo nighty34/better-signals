@@ -92,22 +92,7 @@ function signals.updateSignals()
 								local newCheckSum = signalPath.checksum
 
 								if (not signals.signalObjects[signalString].checksum) or (newCheckSum ~= signals.signalObjects[signalString].checksum) then
-									local proposal = api.type.SimpleProposal.new()
-									proposal.constructionsToRemove = {} -- TODO
-									local pd = api.engine.util.proposal.makeProposalData(proposal, {}) -- can context be something smart?
-									if pd.errorState.critical == true then
-										print(pd.errorState.messages[1] .. " : " .. oldConstruction.fileName)
-									else
-										if pcall(function () 
-											local check = game.interface.upgradeConstruction(oldConstruction.id, oldConstruction.fileName, oldConstruction.params)
-											if check ~= c_signal then
-												print("Construction upgrade error")
-											end
-										end) then
-										else
-											print("Programmical Error during Upgrade")
-										end
-									end
+									utils.updateConstruction(oldConstruction, c_signal)
 								end
 
 								signals.signalObjects[signalString].checksum = newCheckSum	
@@ -155,22 +140,7 @@ function signals.createSignal(signal, construct, signalType, allowWaypoints)
 		oldConstruction.params.better_signals_tunnel_helper = 0
 		oldConstruction.params.seed = nil -- important!!
 
-		local proposal = api.type.SimpleProposal.new()
-		proposal.constructionsToRemove = {} -- TODO
-		local pd = api.engine.util.proposal.makeProposalData(proposal, {}) -- can context be something smart?
-		if pd.errorState.critical == true then
-			print(pd.errorState.messages[1] .. " : " .. oldConstruction.fileName)
-		else
-			if pcall(function () 
-				local check = game.interface.upgradeConstruction(oldConstruction.id, oldConstruction.fileName, oldConstruction.params)
-				if check ~= construct then
-					print("Construction upgrade error")
-				end
-			end) then
-			else
-				print("Programmical Error during Upgrade")
-			end
-		end
+		utils.updateConstruction(oldConstruction, construct)
 	end
 end
 

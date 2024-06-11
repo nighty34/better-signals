@@ -25,6 +25,25 @@ function utils.getComponentProtected(entity, code)
 	end
 end
 
+function utils.updateConstruction(oldConstruction, reference)
+	local proposal = api.type.SimpleProposal.new()
+	proposal.constructionsToRemove = {} -- TODO
+	local pd = api.engine.util.proposal.makeProposalData(proposal, {}) -- can context be something smart?
+	if pd.errorState.critical == true then
+		print(pd.errorState.messages[1] .. " : " .. oldConstruction.fileName)
+	else
+		if pcall(function () 
+			local check = game.interface.upgradeConstruction(oldConstruction.id, oldConstruction.fileName, oldConstruction.params)
+			if check ~= reference then
+				print("Construction upgrade error")
+			end
+		end) then
+		else
+			print("Programmical Error during Upgrade")
+		end
+	end
+end
+
 function utils.getMinValue(values)
 	local minValue = math.huge
 	for _, value in ipairs(values) do
