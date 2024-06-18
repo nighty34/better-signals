@@ -1,4 +1,3 @@
-local config = require "nightfury/signals/config"
 local signals = require "nightfury/signals/main"
 
 function data()
@@ -28,7 +27,6 @@ function data()
 			},
 		},
 		runFn = function(settings, modParams)
-			config.load()
 
 			if modParams[getCurrentModId()] ~= nil then
 				local params = modParams[getCurrentModId()]
