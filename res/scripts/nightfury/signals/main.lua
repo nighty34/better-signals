@@ -25,7 +25,7 @@ function signals.updateSignals()
 	local vehicles = game.interface.getEntities({pos = signals.pos, radius = trainActivationRange}, {type = "VEHICLE"})
 	-- zone.setZoneCircle("zoneRadius", signals.pos, 500)
 
-	for i, trackedTrain in pairs(signals.trackedEntities) do
+	for _, trackedTrain in pairs(signals.trackedEntities) do
 		local tracked = game.interface.getEntity(trackedTrain)
 		if tracked then
 			local trackedPos = tracked.position
@@ -60,11 +60,10 @@ function signals.updateSignals()
 		end
 	end
 	
-	for _,train in pairs(trains) do
+	for _, train in pairs(trains) do
 		local move_path = utils.getComponentProtected(train, 66)
 
-		if move_path then	
-			--local signalPaths = walkPath(move_path, train)
+		if move_path then
 			local signalPaths = evaluatePath(move_path)
 			
 			for _, signalPath in ipairs(signalPaths) do
@@ -78,6 +77,18 @@ function signals.updateSignals()
 						local c_signal = tableEntry.construction
 						signals.signalObjects[signalString].changed = 1
 						
+						-- Eval Train
+
+						local transportVehicle = utils.getComponentProtected(train, 70)
+
+						if transportVehicle and transportVehicle.line then
+							local lineName = utils.getComponentProtected(transportVehicle.line, 63)
+
+							if lineName then
+								signalPath.line = lineName.name
+							end
+						end
+
 						if c_signal then
 							local oldConstruction = game.interface.getEntity(c_signal)
 							if oldConstruction then
@@ -87,6 +98,7 @@ function signals.updateSignals()
 								oldConstruction.params.following_signal = signalPath.following_signal
 								oldConstruction.params.paramsOverride = signalPath.paramsOverride
 								oldConstruction.params.showSpeedChange = signalPath.showSpeedChange
+								oldConstruction.params.currentLine = signalPath.line
 								oldConstruction.params.seed = nil -- important!!
 
 								local newCheckSum = signalPath.checksum
