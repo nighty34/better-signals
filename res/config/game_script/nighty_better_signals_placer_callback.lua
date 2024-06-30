@@ -137,7 +137,7 @@ function data()
 								signalState.connectedUpdated = true
 							end
 							signalState.connectedSignal = string.match(key, "%d+$")
-							zone.markEntity("connectedSignal" .. index, tonumber(signalState.connectedSignal), 1, {0, 1, 0, 1})
+							zone.markEntity("connectedSignal", tonumber(signalState.connectedSignal), 1, {0, 1, 0, 1})
 						elseif key == "signal" .. param.entityId then
 							local modelInstance = utils.getComponentProtected(param.entityId, 58)
 							if modelInstance then
@@ -159,7 +159,7 @@ function data()
 						if signal.construction == param.entityId or key == "signal" .. param.entityId then
 							if not signalState.connectedUpdated then
 								signalState.connectedSignal = nil
-								zone.remZone("connectedSignal" .. index)
+								zone.remZone("connectedSignal")
 							else
 								signalState.connectedUpdated = false
 							end
