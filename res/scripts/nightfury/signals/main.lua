@@ -274,7 +274,7 @@ function evaluatePath(path)
 						edgeSpeeds = {}
 					elseif signal.type == 2 then
 						local name = utils.getComponentProtected(potentialSignal.entity, 63)
-						local values = parseName(name.name)
+						local values = parseName(string.gsub(name.name, " ", ""))
 
 						currentSegment.paramsOverride = values
 					end
