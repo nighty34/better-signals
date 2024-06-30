@@ -5,7 +5,7 @@ function data()
 		info = {
 			name = _("better_signals_name"),
 			description = _("better_signals_desc"),
-			minorVersion = 0,
+			minorVersion = 0.1,
 			modid = "nightfury34_better_signals_1",
 			severityAdd = "NONE",
 			severityRemove = "WARNING",
