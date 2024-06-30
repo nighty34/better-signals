@@ -214,24 +214,6 @@ function parseName(input)
     return result
 end
 
-function parseName_old(input)
-    local values = {}
-    -- Iterate over each key-value pair in the input string
-    for pair in input:gmatch("%s*([^,]+)%s*,?") do
-        local key, value = pair:match("(%w+)%s*=%s*(%s+)")
-		if key and value then
-			if string.lower(value) == 'false' then
-				value = 0
-			elseif string.lower(value) == 'true' then
-				value = 1
-			end
-			values[key] = tonumber(value)
-		end
-    end
-    
-    return values
-end
-
 function evaluatePath(path)
 	local pathViewDistance = signals.viewDistance-- To be changed
 
