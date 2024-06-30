@@ -1,5 +1,8 @@
 local utils =  {}
 
+-- Get speed of edge by edgeId
+-- @param edgeId reference to edge
+-- @return returns speed as number or math.huge if speed can't be evaluated
 function utils.getEdgeSpeed(edgeId)
 	local transportNetwork = utils.getComponentProtected(edgeId.entity, 52)
 	local speed = math.huge
@@ -17,25 +20,32 @@ function utils.getEdgeSpeed(edgeId)
 	return speed * 3.6
 end
 
-function utils.getComponentProtected(entity, code)
-	if pcall(function() api.engine.getComponent(entity, code) end) then
-		return api.engine.getComponent(entity, code)
+-- Get component from entity
+-- @param entityId reference to entity given as number
+-- @param componentId id of the component that should be returned
+-- @return retuns component or nil if the component isn't attatched to referenced entity
+function utils.getComponentProtected(entityId, componentId)
+	if pcall(function() api.engine.getComponent(entityId, componentId) end) then
+		return api.engine.getComponent(entityId, componentId)
 	else
 		return nil
 	end
 end
 
-function utils.updateConstruction(oldConstruction, reference)
-	oldConstruction.params.seed = nil -- important!!
-	
+-- Update existing construction
+-- @param params parameter by which the new construction should be build
+-- @param reference is a reference to the old entity. This is used to check if the new entity still holds the same id as before
+function utils.updateConstruction(params, reference)
+	params.params.seed = nil
+
 	local proposal = api.type.SimpleProposal.new()
-	proposal.constructionsToRemove = {} -- TODO
-	local pd = api.engine.util.proposal.makeProposalData(proposal, {}) -- can context be something smart?
+	proposal.constructionsToRemove = {}
+	local pd = api.engine.util.proposal.makeProposalData(proposal, {})
 	if pd.errorState.critical == true then
-		print(pd.errorState.messages[1] .. " : " .. oldConstruction.fileName)
+		print(pd.errorState.messages[1] .. " : " .. params.fileName)
 	else
 		if pcall(function () 
-			local check = game.interface.upgradeConstruction(oldConstruction.id, oldConstruction.fileName, oldConstruction.params)
+			local check = game.interface.upgradeConstruction(params.id, params.fileName, params.params)
 			if check ~= reference then
 				print("Construction upgrade error")
 			end
@@ -46,27 +56,23 @@ function utils.updateConstruction(oldConstruction, reference)
 	end
 end
 
-function utils.getMinValue(values)
+-- Get minimal value from table
+-- @param tbl table with number values
+-- @return lowest value as a number
+function utils.getMinValue(tbl)
 	local minValue = math.huge
-	for _, value in ipairs(values) do
+	for _, value in ipairs(tbl) do
 		minValue = math.min(minValue, value)
 	end
 
 	return minValue
 end
 
-function utils.getFirstKey(list)
-	local firstKey
-
-	for key, _ in pairs(list) do
-		if not firstKey then
-			firstKey = key
-			break
-		end
-	end
-end
-
-function utils.checksum(operator, ...) -- way to simpel checksum 
+-- Create Checksum from values
+-- @param operator this is a multiplier which will be multiplied to the final checksum
+-- @param ... all the values that should from the final checksum
+-- @return returns a checksum as number
+function utils.checksum(operator, ...)
     local args = {...}
 	local localsum = 0
     for _, arg in ipairs(args) do
@@ -78,14 +84,17 @@ function utils.checksum(operator, ...) -- way to simpel checksum
     return localsum * operator
 end
 
+-- Check if string starts with substring
+-- @param str string that should be checked
+-- @param start string that should be checked for
+-- @return returns true if str starts with start. Otherwise false
 function utils.starts_with(str, start)
 	return str:sub(1, #start) == start
 end
 
-function utils.ends_with(str, ending)
-	return ending == "" or str:sub(-#ending) == ending
-end
-
+-- Remove all values from table by value
+-- @param tbl table that should be removed from
+-- @param remove value that should be removed
 function utils.removeFromTableByValue(tbl, remove)
     for key, value in ipairs(tbl) do
 		if value == remove then
@@ -94,22 +103,18 @@ function utils.removeFromTableByValue(tbl, remove)
     end
 end
 
-function utils.contains(tbl, x)
+-- Check if table contains
+-- @param tbl table that should is checked
+-- @param value the value that is checked for
+-- @return returns true if value is in tbl. Otherwise false
+function utils.contains(tbl, value)
     local found = false
     for _, v in pairs(tbl) do
-        if v == x then
+        if v == value then
             found = true
         end
     end
     return found
 end
-
-function utils.inver_table(tbl, attribute)
-	local result={}
-	for key,value in pairs(tbl) do
-	  result[value[attribute]]=key
-	end
-	return result
- end
 
 return utils
