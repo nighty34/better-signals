@@ -31,7 +31,6 @@ function signals.updateSignals()
 			local trackedPos = tracked.position
 			if trackedPos then
 				local newTrains = game.interface.getEntities({pos = {trackedPos[1], trackedPos[2]}, radius = trainActivationRange}, {type = "VEHICLE"})
-				-- zone.setZoneCircle("tracked" .. i, {trackedPos[1], trackedPos[2]}, trainActivationRange/2)
 				if newTrains and #newTrains > 0 then
 					for _, newTrain in pairs(newTrains) do
 						if not utils.contains(vehicles, newTrain) then
@@ -72,44 +71,55 @@ function signals.updateSignals()
 					local signalState = signalPath.signal_state
 					local signalString = "signal" .. signalPath.entity
 					local tableEntry = signals.signalObjects[signalString]
-					
+
 					if tableEntry then
-						local c_signal = tableEntry.construction
-						signals.signalObjects[signalString].changed = 1
-						
-						-- Eval Train
+						for _, betterSignal in pairs(tableEntry.signals) do
 
-						local transportVehicle = utils.getComponentProtected(train, 70)
+							signals.signalObjects[signalString].changed = 1
 
-						if transportVehicle and transportVehicle.line then
-							local lineName = utils.getComponentProtected(transportVehicle.line, 63)
+							local conSignal = betterSignal.construction
+							local transportVehicle = utils.getComponentProtected(train, 70)
 
-							if lineName then
-								signalPath.line = lineName.name
-							end
-						end
+							if transportVehicle and transportVehicle.line then
+								local lineName = utils.getComponentProtected(transportVehicle.line, 63)
 
-						if c_signal then
-							local oldConstruction = game.interface.getEntity(c_signal)
-							if oldConstruction then
-								oldConstruction.params.previous_speed = signalPath.previous_speed
-								oldConstruction.params.signal_state = signalState
-								oldConstruction.params.signal_speed = math.floor(minSpeed)
-								oldConstruction.params.following_signal = signalPath.following_signal
-								oldConstruction.params.paramsOverride = signalPath.paramsOverride
-								oldConstruction.params.showSpeedChange = signalPath.showSpeedChange
-								oldConstruction.params.currentLine = signalPath.line
-								oldConstruction.params.seed = nil -- important!!
-
-								local newCheckSum = signalPath.checksum
-
-								if (not signals.signalObjects[signalString].checksum) or (newCheckSum ~= signals.signalObjects[signalString].checksum) then
-									utils.updateConstruction(oldConstruction, c_signal)
+								if lineName then
+									signalPath.line = lineName.name
 								end
+							end
 
-								signals.signalObjects[signalString].checksum = newCheckSum	
-							else
-								print("Couldn't access params")
+							if conSignal then
+								local oldConstruction = game.interface.getEntity(conSignal)
+								if oldConstruction then
+									if betterSignal.isAnimated then
+										oldConstruction.params.timer = oldConstruction.params.timer and oldConstruction.params.timer + 1 or 0
+										signalPath.checksum = signalPath.checksum + oldConstruction.params.timer
+									end
+
+									oldConstruction.params.previous_speed = signalPath.previous_speed
+									oldConstruction.params.signal_state = signalState
+									oldConstruction.params.signal_speed = math.floor(minSpeed)
+									oldConstruction.params.following_signal = signalPath.following_signal
+									oldConstruction.params.paramsOverride = signalPath.paramsOverride
+									oldConstruction.params.showSpeedChange = signalPath.showSpeedChange
+									oldConstruction.params.currentLine = signalPath.line
+									oldConstruction.params.seed = nil -- important!!
+
+									local newCheckSum = signalPath.checksum
+
+									local construction = utils.getComponentProtected(conSignal, 13)
+									if construction then
+										construction.timeBuilt = 0
+									end
+
+									if (not signals.signalObjects[signalString].checksum) or (newCheckSum ~= signals.signalObjects[signalString].checksum) then
+										utils.updateConstruction(oldConstruction, conSignal)
+									end
+
+									signals.signalObjects[signalString].checksum = newCheckSum
+								else
+									print("Couldn't access params")
+								end
 							end
 						end
 					end
@@ -119,17 +129,19 @@ function signals.updateSignals()
 	end
 	
 	-- Throw signal to red
-	for key, value in pairs(signals.signalObjects) do
+	for _, value in pairs(signals.signalObjects) do
 		if value.changed == 2 then
-			local oldConstruction = game.interface.getEntity(value.construction)
-			if oldConstruction then
-				oldConstruction.params.signal_state = 0
-				oldConstruction.params.previous_speed = nil
-				oldConstruction.params.seed = nil -- important!!
+			for _, signal in ipairs(value.signals) do
+				local oldConstruction = game.interface.getEntity(signal.construction)
+				if oldConstruction then
+					oldConstruction.params.signal_state = 0
+					oldConstruction.params.previous_speed = nil
+					oldConstruction.params.seed = nil -- important!!
 
-				game.interface.upgradeConstruction(oldConstruction.id, oldConstruction.fileName, oldConstruction.params)
+					game.interface.upgradeConstruction(oldConstruction.id, oldConstruction.fileName, oldConstruction.params)
+				end
+				value.changed = 0
 			end
-			value.changed = 0
 		end
 	end
 end
@@ -138,14 +150,24 @@ end
 -- Registers new signal
 -- @param signal signal entityid
 -- @param construct construction entityid
-function signals.createSignal(signal, construct, signalType, allowWaypoints)
+function signals.createSignal(signal, construct, signalType, isAnimated)
 	local signalKey = "signal" .. signal
 	print("Register Signal: " .. signal .. " (" .. signalKey ..") With construction: " .. construct)
-	signals.signalObjects[signalKey] = {}
-	signals.signalObjects[signalKey].construction = construct
+
+	if not signals.signalObjects[signalKey] then
+		signals.signalObjects[signalKey] = {}
+		signals.signalObjects[signalKey].signals = {}
+	end
+
 	signals.signalObjects[signalKey].changed = 0
-	signals.signalObjects[signalKey].type = signalType
-	signals.signalObjects[signalKey].allowWaypoints = allowWaypoints
+
+	local newSignal = {}
+
+	newSignal.construction = construct
+	newSignal.type = signalType
+	newSignal.isAnimated = isAnimated
+	
+	table.insert(signals.signalObjects[signalKey].signals, newSignal)
 
 	local oldConstruction = game.interface.getEntity(construct)
 	if oldConstruction then
@@ -220,7 +242,7 @@ function evaluatePath(path)
 	local followingSignal = {}
 
 	if path.path then
-		local pathStart = math.max((path.dyn.pathPos.edgeIndex - 2), 1)
+		local pathStart = math.max((path.dyn.pathPos.edgeIndex - 6), 1)
 		local pathEnd = math.min(#path.path.edges, pathStart + pathViewDistance)
 
 		for pathIndex = pathEnd, pathStart, -1 do
@@ -238,7 +260,7 @@ function evaluatePath(path)
 
 					local signal = signalComponent.signals[1]
 
-					if (signal.type == 0 or signal.type == 1) or (potentialSignal.entity and (signals.signalObjects["signal" .. potentialSignal.entity] and signals.signalObjects["signal" .. potentialSignal.entity].allowWaypoints)) then -- Adding Signal
+					if (signal.type == 0 or signal.type == 1) or (potentialSignal.entity and signals.signalObjects["signal" .. potentialSignal.entity]) then -- Adding Signal
 
 						currentSegment.entity = potentialSignal.entity
 						currentSegment.signal_state = signal.state

@@ -1,5 +1,6 @@
 local signals = require "nightfury/signals/main"
 local utils = require "nightfury/signals/utils"
+local migrator = require "nightfury/signals/migrator"
 local zone = require "nightfury/signals/zone"
 
 local signalState = {
@@ -9,6 +10,9 @@ local signalState = {
 	connectedSignal = nil,
 	connectedUpdated = false,
 }
+
+local inital_load = true
+local scriptCurrentVersion = 0
 
 local tempSignalPosTracker = {}
 
@@ -34,7 +38,7 @@ local function getSignal(params)
 	local result = {
 		position = position,
 		type = signals.signals[signal].type,
-		allowWaypoints = signals.signals[signal].allowWaypoints,
+		isAnimated = signals.signals[signal].isAnimated,
 	}
 	return result
 end
@@ -61,15 +65,27 @@ function data()
 		save = function()
 			local state = {}
 			state.signals = signals.save()
+			state.version = scriptCurrentVersion
 			return state
 		end,
 		load = function(loadedState)
 			local state = loadedState or {signals = {}}
 			if state then
+				if state.version then
+					scriptCurrentVersion = state.version
+				end
+
 				signals.load(state.signals)
 			end
 		end,
 		update = function()
+			if inital_load then
+				print("Better Signals - Start Migration")
+				scriptCurrentVersion, signals.signalObjects = migrator.migrate(scriptCurrentVersion, signals.signalObjects)
+				inital_load = false
+				print("Better Signals - Finish Migration")
+			end
+
 			local success, errorMessage = pcall(signals.updateSignals)
 		
 			if success then
@@ -92,7 +108,7 @@ function data()
 				if signalState.markedSignal then 
 					local r_signal = signalState.markedSignal
 					
-					signals.createSignal(r_signal, param.construction, param.type, param.allowWaypoints)
+					signals.createSignal(r_signal, param.construction, param.type, param.isAnimated)
 				else
 					print("No Signal Found")
 				end
@@ -115,21 +131,21 @@ function data()
 
 			elseif name == "tracking.add" then
 				for key, value in pairs(signals.signalObjects) do
-					if value.construction == param.entityId then
-						if signalState.connectedSignal ~= nil then
-							zone.remZone("connectedSignal")
-							signalState.connectedUpdated = true
-						end
-						signalState.connectedSignal = string.match(key, "%d+$")
-						zone.markEntity("connectedSignal", tonumber(signalState.connectedSignal), 1, {0, 1, 0, 1})
-						return
-					elseif key == "signal" .. param.entityId then
-						local modelInstance = utils.getComponentProtected(param.entityId, 58)
-						if modelInstance then
-							local transf = modelInstance.fatInstances[1].transf
-							if transf then
-								tempSignalPosTracker["signal" .. param.entityId] = {}
-								tempSignalPosTracker["signal" .. param.entityId].pos = {transf[13], transf[14]}
+					for index, signal in ipairs(value.signals) do
+						if signal.construction == param.entityId then
+							if signalState.connectedSignal ~= nil then
+								signalState.connectedUpdated = true
+							end
+							signalState.connectedSignal = string.match(key, "%d+$")
+							zone.markEntity("connectedSignal" .. index, tonumber(signalState.connectedSignal), 1, {0, 1, 0, 1})
+						elseif key == "signal" .. param.entityId then
+							local modelInstance = utils.getComponentProtected(param.entityId, 58)
+							if modelInstance then
+								local transf = modelInstance.fatInstances[1].transf
+								if transf then
+									tempSignalPosTracker["signal" .. param.entityId] = {}
+									tempSignalPosTracker["signal" .. param.entityId].pos = {transf[13], transf[14]}
+								end
 							end
 						end
 					end
@@ -139,13 +155,14 @@ function data()
 
 			elseif name == "tracking.remove" then
 				for key, value in pairs(signals.signalObjects) do
-					if value.construction == param.entityId or key == "signal" .. param.entityId then
-						if not signalState.connectedUpdated then
-							signalState.connectedSignal = nil
-							zone.remZone("connectedSignal")
-							return
-						else
-							signalState.connectedUpdated = false
+					for index, signal in ipairs(value.signals) do
+						if signal.construction == param.entityId or key == "signal" .. param.entityId then
+							if not signalState.connectedUpdated then
+								signalState.connectedSignal = nil
+								zone.remZone("connectedSignal" .. index)
+							else
+								signalState.connectedUpdated = false
+							end
 						end
 					end
 				end
