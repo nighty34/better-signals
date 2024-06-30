@@ -103,7 +103,6 @@ function signals.updateSignals()
 									oldConstruction.params.paramsOverride = signalPath.paramsOverride
 									oldConstruction.params.showSpeedChange = signalPath.showSpeedChange
 									oldConstruction.params.currentLine = signalPath.line
-									oldConstruction.params.seed = nil -- important!!
 
 									local newCheckSum = signalPath.checksum
 
@@ -131,14 +130,13 @@ function signals.updateSignals()
 	-- Throw signal to red
 	for _, value in pairs(signals.signalObjects) do
 		if value.changed == 2 then
-			for _, signal in ipairs(value.signals) do
+			for _, signal in pairs(value.signals) do
 				local oldConstruction = game.interface.getEntity(signal.construction)
 				if oldConstruction then
 					oldConstruction.params.signal_state = 0
 					oldConstruction.params.previous_speed = nil
-					oldConstruction.params.seed = nil -- important!!
 
-					game.interface.upgradeConstruction(oldConstruction.id, oldConstruction.fileName, oldConstruction.params)
+					utils.updateConstruction(oldConstruction, signal.construction)
 				end
 				value.changed = 0
 			end
@@ -168,14 +166,6 @@ function signals.createSignal(signal, construct, signalType, isAnimated)
 	newSignal.isAnimated = isAnimated
 	
 	table.insert(signals.signalObjects[signalKey].signals, newSignal)
-
-	local oldConstruction = game.interface.getEntity(construct)
-	if oldConstruction then
-		oldConstruction.params.better_signals_tunnel_helper = 0
-		oldConstruction.params.seed = nil -- important!!
-
-		utils.updateConstruction(oldConstruction, construct)
-	end
 end
 
 function signals.removeSignalBySignal(signal)
@@ -188,6 +178,15 @@ function signals.removeSignalByConstruction(construction)
 			signals.signalObjects[key] = nil
 			return
 		end
+	end
+end
+
+function signals.removeTunnel(signalConstructionId)
+	local oldConstruction = game.interface.getEntity(signalConstructionId)
+	if oldConstruction then
+		oldConstruction.params.better_signals_tunnel_helper = 0
+
+		utils.updateConstruction(oldConstruction, signalConstructionId)
 	end
 end
 

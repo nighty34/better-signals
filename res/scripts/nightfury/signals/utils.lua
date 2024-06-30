@@ -26,6 +26,8 @@ function utils.getComponentProtected(entity, code)
 end
 
 function utils.updateConstruction(oldConstruction, reference)
+	oldConstruction.params.seed = nil -- important!!
+	
 	local proposal = api.type.SimpleProposal.new()
 	proposal.constructionsToRemove = {} -- TODO
 	local pd = api.engine.util.proposal.makeProposalData(proposal, {}) -- can context be something smart?

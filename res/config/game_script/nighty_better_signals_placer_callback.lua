@@ -95,17 +95,19 @@ function data()
 		end,
 		guiUpdate = function()
 			local controller = api.gui.util.getGameUI():getMainRendererComponent():getCameraController()
-			local campos, _, _ = controller:getCameraData()
+			local camPos, _, _ = controller:getCameraData()
 			
-			game.interface.sendScriptEvent("__signalEvent__", "signals.viewUpdate", {campos[1], campos[2]})
+			game.interface.sendScriptEvent("__signalEvent__", "signals.viewUpdate", {camPos[1], camPos[2]})
 		end,
 		handleEvent = function(src, id, name, param)
 			if id ~="__signalEvent__" or src ~= "nighty_better_signals_placer_callback.lua" then
 				return
 			end
 			
-            if name == "builder.apply" then	
-				if signalState.markedSignal then 
+            if name == "builder.apply" then
+				signals.removeTunnel(param.construction)
+
+				if signalState.markedSignal then
 					local r_signal = signalState.markedSignal
 					
 					signals.createSignal(r_signal, param.construction, param.type, param.isAnimated)
