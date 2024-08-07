@@ -73,6 +73,8 @@ function signals.updateSignals()
 					local tableEntry = signals.signalObjects[signalString]
 
 					if tableEntry then
+						local newCheckSum = 0
+
 						for _, betterSignal in pairs(tableEntry.signals) do
 
 							signals.signalObjects[signalString].changed = 1
@@ -90,11 +92,7 @@ function signals.updateSignals()
 
 							if conSignal then
 								local oldConstruction = game.interface.getEntity(conSignal)
-								if oldConstruction then
-									if betterSignal.isAnimated then
-										oldConstruction.params.timer = oldConstruction.params.timer and oldConstruction.params.timer + 1 or 0
-										signalPath.checksum = signalPath.checksum + oldConstruction.params.timer
-									end
+								if oldConstruction and oldConstruction.params then
 
 									oldConstruction.params.previous_speed = signalPath.previous_speed
 									oldConstruction.params.signal_state = signalState
@@ -104,23 +102,18 @@ function signals.updateSignals()
 									oldConstruction.params.showSpeedChange = signalPath.showSpeedChange
 									oldConstruction.params.currentLine = signalPath.line
 
-									local newCheckSum = signalPath.checksum
-
-									local construction = utils.getComponentProtected(conSignal, 13)
-									if construction then
-										construction.timeBuilt = 0
-									end
+									newCheckSum = signalPath.checksum
 
 									if (not signals.signalObjects[signalString].checksum) or (newCheckSum ~= signals.signalObjects[signalString].checksum) then
 										utils.updateConstruction(oldConstruction, conSignal)
 									end
-
-									signals.signalObjects[signalString].checksum = newCheckSum
 								else
 									print("Couldn't access params")
 								end
 							end
 						end
+
+						signals.signalObjects[signalString].checksum = newCheckSum
 					end
 				end
 			end
@@ -174,10 +167,13 @@ end
 
 function signals.removeSignalByConstruction(construction)
 	for key, value in pairs(signals.signalObjects) do
-		if value.construction == construction then
-			signals.signalObjects[key] = nil
-			return
-		end
+		for index, signal in ipairs(value.signals) do
+			if signal.construction == construction then
+				table.remove(value.signals, index)
+				print("Removed Signal " .. construction .. " at index: " .. index)
+				return
+			end
+		end	
 	end
 end
 

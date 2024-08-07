@@ -131,6 +131,9 @@ function data()
 					signals.removeSignalBySignal(value)
 				end
 
+			elseif name == "signals.removeByConsruction" then
+				signals.removeSignalByConstruction(param.entityId)
+
 			elseif name == "tracking.add" then
 				for key, value in pairs(signals.signalObjects) do
 					for index, signal in ipairs(value.signals) do
@@ -218,15 +221,13 @@ function data()
 				end
 			end
 			if id == "bulldozer" and name == "builder.apply" then
-				local removeObjects = {}
-				local params = {}
-
 				if param and param.proposal and param.proposal.proposal then
+					local removeObjects = {}
+					local params = {}
+					local removedEdges = param.proposal.proposal.edgeObjectsToRemove
 
-					local toBeRemoved = param.proposal.proposal.edgeObjectsToRemove
-
-					if #toBeRemoved > 0 then
-						for _, value in pairs(toBeRemoved) do
+					if #removedEdges > 0 then
+						for _, value in pairs(removedEdges) do
 							table.insert(removeObjects, value)
 							params.entityId = tonumber(value)
 							game.interface.sendScriptEvent("__signalEvent__", "tracking.remove", params)
@@ -235,7 +236,20 @@ function data()
 						params.remove = removeObjects
 						game.interface.sendScriptEvent("__signalEvent__", "signals.remove", params)
 					end
+					local removeObjects = {}
+					local params = {}
+					local removedEntities = param.proposal.toRemove
+
+					if #removedEntities > 0 then
+						for _, value in pairs(removedEntities) do
+							table.insert(removeObjects, value)
+							params.entityId = tonumber(value)
+							game.interface.sendScriptEvent("__signalEvent__", "signals.removeByConsruction", params)
+						end
+					end
 				end
+			end
+			if id == "bulldozer" then
 			end
 			if name == "visibilityChange" and param == false then
 				local signal = string.match(id, "^.+/(.+)%.con$")
