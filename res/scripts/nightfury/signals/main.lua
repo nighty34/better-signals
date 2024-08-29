@@ -245,6 +245,10 @@ function evaluatePath(path)
 
 						currentSegment.signal_speed = utils.getMinValue(edgeSpeeds)
 
+						if currentSegment.paramsOverride and currentSegment.paramsOverride.speed then
+							currentSegment.signal_speed = currentSegment.paramsOverride.speed
+						end
+
 						if followingSignal then
 							if #evaluatedPath > 1 then
 								followingSignal.previous_speed = currentSegment.signal_speed
