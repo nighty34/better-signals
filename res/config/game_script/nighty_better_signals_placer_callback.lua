@@ -12,7 +12,7 @@ local signalState = {
 }
 
 local inital_load = true
-local scriptCurrentVersion = 0
+local scriptCurrentVersion = 1
 
 local tempSignalPosTracker = {}
 
@@ -73,6 +73,8 @@ function data()
 			if state then
 				if state.version then
 					scriptCurrentVersion = state.version
+				else
+					scriptCurrentVersion = 0
 				end
 
 				signals.load(state.signals)
