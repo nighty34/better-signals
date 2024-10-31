@@ -151,11 +151,12 @@ function signals.createSignal(signal, construct, signalType, isAnimated)
 	end
 
 	signals.signalObjects[signalKey].changed = 0
+	signals.signalObjects[signalKey].signalType = signalType
+	signals.signalObjects[signalKey].construction = construct
 
 	local newSignal = {}
 
 	newSignal.construction = construct
-	newSignal.type = signalType
 	newSignal.isAnimated = isAnimated
 	
 	table.insert(signals.signalObjects[signalKey].signals, newSignal)
@@ -209,6 +210,25 @@ function parseName(input)
     return result
 end
 
+local function isSignal (signal, potentialSignal)
+	if signals.signalObjects["signal" .. potentialSignal.entity] then
+		local signalType = signals.signals[signals.signalObjects["signal" .. potentialSignal.entity].signalType]
+		local construction = utils.getComponentProtected(signals.signalObjects["signal" .. potentialSignal.entity].construction, 13)
+		local isHybrid = false
+
+		if signalType.type == "hybrid" and construction then
+			isHybrid = construction.params[signalType['preSignalTriggerKey']] == signalType['preSignalTriggerValue']
+
+			if isHybrid then
+				return false
+			end
+		end
+	end
+
+	return (signal.type == 0 or signal.type == 1) or ((potentialSignal.entity and signals.signalObjects["signal" .. potentialSignal.entity]))
+end
+
+
 function evaluatePath(path)
 	local pathViewDistance = signals.viewDistance-- To be changed
 
@@ -226,8 +246,6 @@ function evaluatePath(path)
 			local currentEdge = path.path.edges[pathIndex]
 
 			if currentEdge then
-
-				-- Get EdgeSpeed
 				table.insert(edgeSpeeds, utils.getEdgeSpeed(currentEdge.edgeId))
 
 				local potentialSignal = api.engine.system.signalSystem.getSignal(currentEdge.edgeId, currentEdge.dir)
@@ -237,7 +255,7 @@ function evaluatePath(path)
 
 					local signal = signalComponent.signals[1]
 
-					if (signal.type == 0 or signal.type == 1) or (potentialSignal.entity and signals.signalObjects["signal" .. potentialSignal.entity]) then -- Adding Signal
+					if (isSignal(signal, potentialSignal)) then
 
 						currentSegment.entity = potentialSignal.entity
 						currentSegment.signal_state = signal.state
@@ -271,6 +289,11 @@ function evaluatePath(path)
 						followingSignal = currentSegment
 						currentSegment = {}
 						edgeSpeeds = {}
+					elseif (signal.type == 0 or signal.type == 1) or (potentialSignal.entity and signals.signalObjects["signal" .. potentialSignal.entity]) then -- preSignal
+						local preSignalTable = utils.deepCopy(followingSignal)
+						preSignalTable.entity = potentialSignal.entity
+
+						table.insert(evaluatedPath, 1, preSignalTable)
 					elseif signal.type == 2 then
 						local name = utils.getComponentProtected(potentialSignal.entity, 63)
 						local values = parseName(string.gsub(name.name, " ", ""))

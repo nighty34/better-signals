@@ -28,6 +28,7 @@ function data()
 		},
 		runFn = function(settings, modParams)
 
+
 			if modParams[getCurrentModId()] ~= nil then
 				local params = modParams[getCurrentModId()]
 				
@@ -35,8 +36,11 @@ function data()
 					signals.viewDistance = params["better_signals_view_distance"] *10
 				end
 			end
-			
 
+			signals.signals['default'] = {
+				type = "main",
+				isAnimated = false
+			}
 		end,
 	}
 end

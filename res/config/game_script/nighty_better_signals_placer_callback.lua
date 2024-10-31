@@ -37,7 +37,7 @@ local function getSignal(params)
 	
 	local result = {
 		position = position,
-		type = signals.signals[signal].type,
+		signalType = signal,
 		isAnimated = signals.signals[signal].isAnimated,
 	}
 	return result
@@ -111,8 +111,7 @@ function data()
 
 				if signalState.markedSignal then
 					local r_signal = signalState.markedSignal
-					
-					signals.createSignal(r_signal, param.construction, param.type, param.isAnimated)
+					signals.createSignal(r_signal, param.construction, param.signalType, param.isAnimated)
 				else
 					print("No Signal Found")
 				end

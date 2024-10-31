@@ -3,6 +3,10 @@ local signals = require "nightfury/signals/main"
 local config = {}
 
 config.signals = {
+	default = {
+		type = "main",
+		isAnimated = false,
+	}
 }
 
 
