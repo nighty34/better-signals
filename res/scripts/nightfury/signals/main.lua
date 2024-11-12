@@ -13,6 +13,11 @@ signals.trackedEntities = {}
 signals.viewDistance = 20
 
 
+local function getSignalType(signal)
+	local signalType = signals.signals[signals.signalObjects["signal" .. signal.entity].signalType]
+	return signalType.type
+end
+
 -- 3 states: None, Changed, WasChanged
 
 -- Function checks move_path of all the trains
@@ -104,7 +109,7 @@ function signals.updateSignals()
 
 									newCheckSum = signalPath.checksum
 
-									if (not signals.signalObjects[signalString].checksum) or (newCheckSum ~= signals.signalObjects[signalString].checksum) then
+									if (not signals.signalObjects[signalString].checksum) or (newCheckSum ~= signals.signalObjects[signalString].checksum) or (getSignalType(signalPath) == "hybrid" or getSignalType(signalPath) == "pre") then
 										utils.updateConstruction(oldConstruction, conSignal)
 									end
 								else
@@ -237,6 +242,7 @@ function evaluatePath(path)
 	local edgeSpeeds = {}
 	local checksum = 0
 	local followingSignal = {}
+	local preSignalTable = {}
 
 	if path.path then
 		local pathStart = math.max((path.dyn.pathPos.edgeIndex - 6), 1)
@@ -270,6 +276,7 @@ function evaluatePath(path)
 						if followingSignal then
 							if #evaluatedPath > 1 then
 								followingSignal.previous_speed = currentSegment.signal_speed
+								preSignalTable.previous_speed = currentSegment.signal_speed
 							end
 
 							currentSegment.following_signal = followingSignal
@@ -290,8 +297,11 @@ function evaluatePath(path)
 						currentSegment = {}
 						edgeSpeeds = {}
 					elseif (signal.type == 0 or signal.type == 1) or (potentialSignal.entity and signals.signalObjects["signal" .. potentialSignal.entity]) then -- preSignal
-						local preSignalTable = utils.deepCopy(followingSignal)
+						preSignalTable = utils.deepCopy(followingSignal)
 						preSignalTable.entity = potentialSignal.entity
+
+						preSignalTable.checksum = checksum + utils.checksum(preSignalTable.entity, preSignalTable.signal_state, preSignalTable.signal_speed, #evaluatedPath)
+						checksum = preSignalTable.checksum
 
 						table.insert(evaluatedPath, 1, preSignalTable)
 					elseif signal.type == 2 then
