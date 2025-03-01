@@ -81,7 +81,7 @@ function utils.checksum(operator, ...)
 		end
 	end
 
-    return localsum * operator
+    return localsum * operator/1000
 end
 
 -- Check if string starts with substring
@@ -131,6 +131,11 @@ function utils.deepCopy(orig)
         copy = orig
     end
     return copy
+end
+
+function utils.extract_number(s)
+    local num = s:match("%d+")
+    return num and tonumber(num) or nil 
 end
 
 return utils

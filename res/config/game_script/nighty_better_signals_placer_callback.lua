@@ -1,4 +1,5 @@
 local signals = require "nightfury/signals/main"
+local betterSignals = require "nightfury/signals/better_signals"
 local utils = require "nightfury/signals/utils"
 local migrator = require "nightfury/signals/migrator"
 local zone = require "nightfury/signals/zone"
@@ -11,8 +12,10 @@ local signalState = {
 	connectedUpdated = false,
 }
 
-local inital_load = true
+local preMigrationState = {}
+local hasMigrated = false
 local scriptCurrentVersion = 1
+local initalLoad = true
 
 local tempSignalPosTracker = {}
 
@@ -29,7 +32,7 @@ local function getSignal(params)
     local added = params.proposal.toAdd[1]
     local signal = string.match(added.fileName, "^.+/(.+)%.con$")
 
-	if signals.signals[signal] == nil then
+	if betterSignals.blueprints[signal] == nil then
 		return
 	end
 
@@ -38,7 +41,6 @@ local function getSignal(params)
 	local result = {
 		position = position,
 		signalType = signal,
-		isAnimated = signals.signals[signal].isAnimated,
 	}
 	return result
 end
@@ -63,37 +65,65 @@ end
 function data()
 	return{
 		save = function()
-			local state = {}
-			state.signals = signals.save()
-			state.version = scriptCurrentVersion
-			return state
+			if hasMigrated then
+				local state = {}
+				state.signals = betterSignals.save()
+				state.version = scriptCurrentVersion
+				return state
+			else
+				return preMigrationState
+			end
 		end,
-		load = function(loadedState)
+		load = function(loadedState) -- executed in ui and engine
 			local state = loadedState or {signals = {}}
 			if state then
-				if state.version then
-					scriptCurrentVersion = state.version
+				if hasMigrated then
+					if state.version then
+						scriptCurrentVersion = state.signals
+						betterSignals.load(state.signals)
+					else
+						scriptCurrentVersion = 0
+					end
 				else
-					scriptCurrentVersion = 0
+					preMigrationState = state
 				end
+			end
 
-				signals.load(state.signals)
+			if initalLoad then
+				-- depricated - remove as soon as all mods are updated
+				for key, value in pairs(signals.signals) do
+					if betterSignals.blueprints[key] == nil then
+						print("BetterSignals - Signal " .. key .. " is depricated - please update to the new blueprint registration")
+						betterSignals.addBlueprint(
+							key, {
+								type = value.type,
+								isAnimated = value.isAnimated,
+							}
+						)
+					end
+				end
 			end
 		end,
 		update = function()
-			if inital_load then
+			if not hasMigrated then
 				print("Better Signals - Start Migration")
-				scriptCurrentVersion, signals.signalObjects = migrator.migrate(scriptCurrentVersion, signals.signalObjects)
-				inital_load = false
+				scriptCurrentVersion = preMigrationState.version
+				scriptCurrentVersion, betterSignals.registeredSignals = migrator.migrate(scriptCurrentVersion, preMigrationState.signals)
+				hasMigrated = true
 				print("Better Signals - Finish Migration")
-			end
 
-			local success, errorMessage = pcall(signals.updateSignals)
+				betterSignals.load(betterSignals.registeredSignals)
+				commonapi.dmp(betterSignals.registeredSignals)
+			end
+			local success, errorMessage = pcall(betterSignals.updateSignalConstructions)
 		
 			if success then
-			else 
+			else
 				print(errorMessage)
 			end
+		end,
+		guiInit = function ()
+			print("guiInit")
 		end,
 		guiUpdate = function()
 			local controller = api.gui.util.getGameUI():getMainRendererComponent():getCameraController()
@@ -107,14 +137,16 @@ function data()
 			end
 			
             if name == "builder.apply" then
-				signals.removeTunnel(param.construction)
+				-- signals.removeTunnel(param.construction)
 
 				if signalState.markedSignal then
 					local r_signal = signalState.markedSignal
-					signals.createSignal(r_signal, param.construction, param.signalType, param.isAnimated)
+					param.blueprint = betterSignals.blueprints[param.signalType]
+					betterSignals.createSignal(r_signal, param.construction, param.blueprint)
 				else
 					print("No Signal Found")
 				end
+			elseif name == "signals.load" then
 
 			elseif name == "builder.proposalCreate" then
 				signalState.signalIndex = math.abs(param.selection*5)
@@ -129,29 +161,30 @@ function data()
 
 			elseif name == "signals.remove" then
 				for _, value in ipairs(param.remove) do
-					signals.removeSignalBySignal(value)
+					betterSignals["signal" .. value] = nil
+				end
+			elseif name == "signals.removeByConsruction" then
+				for key, entry in pairs(betterSignals.registeredSignals) do
+					if entry.construction and entry.construction == param.entityId then
+						betterSignals.registeredSignals[key] = nil
+					end
 				end
 
-			elseif name == "signals.removeByConsruction" then
-				signals.removeSignalByConstruction(param.entityId)
-
 			elseif name == "tracking.add" then
-				for key, value in pairs(signals.signalObjects) do
-					for index, signal in ipairs(value.signals) do
-						if signal.construction == param.entityId then
-							if signalState.connectedSignal ~= nil then
-								signalState.connectedUpdated = true
-							end
-							signalState.connectedSignal = string.match(key, "%d+$")
-							zone.markEntity("connectedSignal", tonumber(signalState.connectedSignal), 1, {0, 1, 0, 1})
-						elseif key == "signal" .. param.entityId then
-							local modelInstance = utils.getComponentProtected(param.entityId, 58)
-							if modelInstance then
-								local transf = modelInstance.fatInstances[1].transf
-								if transf then
-									tempSignalPosTracker["signal" .. param.entityId] = {}
-									tempSignalPosTracker["signal" .. param.entityId].pos = {transf[13], transf[14]}
-								end
+				for key, value in pairs(betterSignals.registeredSignals) do
+					if value.construction == param.entityId then
+						if signalState.connectedSignal ~= nil then
+							signalState.connectedUpdated = true
+						end
+						signalState.connectedSignal = string.match(key, "%d+$")
+						zone.markEntity("connectedSignal", tonumber(signalState.connectedSignal), 1, {0, 1, 0, 1})
+					elseif key == "signal" .. param.entityId then
+						local modelInstance = utils.getComponentProtected(param.entityId, 58)
+						if modelInstance then
+							local transf = modelInstance.fatInstances[1].transf
+							if transf then
+								tempSignalPosTracker["signal" .. param.entityId] = {}
+								tempSignalPosTracker["signal" .. param.entityId].pos = {transf[13], transf[14]}
 							end
 						end
 					end
@@ -160,15 +193,13 @@ function data()
 				table.insert(signals.trackedEntities, param.entityId)
 
 			elseif name == "tracking.remove" then
-				for key, value in pairs(signals.signalObjects) do
-					for index, signal in ipairs(value.signals) do
-						if signal.construction == param.entityId or key == "signal" .. param.entityId then
-							if not signalState.connectedUpdated then
-								signalState.connectedSignal = nil
-								zone.remZone("connectedSignal")
-							else
-								signalState.connectedUpdated = false
-							end
+				for key, value in pairs(betterSignals.registeredSignals) do
+					if value.construction == param.entityId or key == "signal" .. param.entityId then
+						if not signalState.connectedUpdated then
+							signalState.connectedSignal = nil
+							zone.remZone("connectedSignal")
+						else
+							signalState.connectedUpdated = false
 						end
 					end
 				end
@@ -177,20 +208,20 @@ function data()
 
 			elseif name == "signals.rebuild" then
 				for old, new in pairs(param.matchedObjects) do
-					for key, value in pairs(signals.signalObjects) do
+					for key, value in pairs(betterSignals.registeredSignals) do
 						if key == old then
-							signals.signalObjects["signal" .. new] = value
-							signals.signalObjects[key] = nil
+							betterSignals.registeredSignals["signal" .. new] = value
+							betterSignals.registeredSignals[key] = nil
 						end
 					end
 				end
 			elseif name =="signals.modeSwitch" then
-				for key, value in pairs(signals.signalObjects) do
+				for key, value in pairs(betterSignals.registeredSignals) do
 					if (key == "signal" .. param.entityId) and (tempSignalPosTracker["signal" .. param.entityId].pos ~= nil) then
 						local possibleSignals = game.interface.getEntities({radius=1.3, pos={tempSignalPosTracker["signal" .. param.entityId].pos[1], tempSignalPosTracker["signal" .. param.entityId].pos[2]}}, { type = "SIGNAL" })
 						if #possibleSignals > 0 then
-							signals.signalObjects["signal" .. param.entityId] = nil
-							signals.signalObjects["signal" .. possibleSignals[1]] = value
+							betterSignals.registeredSignals["signal" .. param.entityId] = nil
+							betterSignals.registeredSignals["signal" .. possibleSignals[1]] = value
 							tempSignalPosTracker["signal" .. param.entityId] = nil
 							return
 						end

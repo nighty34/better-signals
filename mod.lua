@@ -1,11 +1,12 @@
 local signals = require "nightfury/signals/main"
+local betterSignals = require "nightfury/signals/better_signals"
 
 function data()
 	return {
 		info = {
 			name = _("better_signals_name"),
 			description = _("better_signals_desc"),
-			minorVersion = 0,
+			minorVersion = 1,
 			modid = "nightfury34_better_signals_1",
 			severityAdd = "NONE",
 			severityRemove = "WARNING",
@@ -24,6 +25,13 @@ function data()
 					tooltip = _("better_signals_view_distance_tooltip"),
 					defaultIndex = 15,
 				  },
+				  {
+					key = "better_signals_debug_mode",
+					name = _("better_signals_debug_mode"),
+					uiType = "CHECKBOX",
+					values = { "0", "1" },
+					tooltip = _("better_signals_debug_mode_tooltip"),
+				  },
 			},
 		},
 		runFn = function(settings, modParams)
@@ -33,7 +41,11 @@ function data()
 				local params = modParams[getCurrentModId()]
 				
 				if params["better_signals_view_distance"] ~= nil then
-					signals.viewDistance = params["better_signals_view_distance"] *10
+					signals.viewDistance = params["better_signals_view_distance"]*10
+				end
+
+				if params["better_signals_debug_mode"] ~= nil and (params["better_signals_debug_mode"] == 1) then
+					betterSignals.debugMode = true
 				end
 			end
 
