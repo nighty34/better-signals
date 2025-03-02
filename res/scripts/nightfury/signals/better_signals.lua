@@ -53,7 +53,7 @@ local function isSignal (signal, potentialSignal)
 		local params = signal:getConstructionParameters()
 		local signalBluePrint = signal:getBluePrint()
 
-		if signalBluePrint:getType() == "hybrid" and params then
+		if signalBluePrint and (signalBluePrint:getType() == "hybrid") and params then
 			isHybrid = params[signalBluePrint:getPreSignalTiggerKey()] == signalBluePrint:getPreSignalTiggerValue()
 			if isHybrid then
 				return false
@@ -136,7 +136,7 @@ end
 
 local function updateSignalDataForTrain(train)
 
-	local move_path = utils.getComponentProtected(train, 66)
+	local move_path = utils.getComponentProtected(train, api.type.ComponentType.MOVE_PATH)
 	local pathViewDistance = signals.viewDistance
 	local segmentSpeed = math.huge
 
@@ -154,7 +154,7 @@ local function updateSignalDataForTrain(train)
 				segmentSpeed = math.min(segmentSpeed, utils.getEdgeSpeed(currentEdge.edgeId))
 
 				local potentialSignalEntity = api.engine.system.signalSystem.getSignal(currentEdge.edgeId, currentEdge.dir).entity
-				local signalComponent = utils.getComponentProtected(potentialSignalEntity,26)
+				local signalComponent = utils.getComponentProtected(potentialSignalEntity,api.type.ComponentType.SIGNAL_LIST)
 
 				if signalComponent and signalComponent.signals and #signalComponent.signals > 0 then
 					local signal = signalComponent.signals[1]
@@ -180,7 +180,7 @@ local function updateSignalDataForTrain(train)
 						registeredSignal:setSignalState(signal.state, 0, {}, lastEvaluated)
 
 					elseif signal.type == 2 then
-						local name = utils.getComponentProtected(potentialSignalEntity, 63)
+						local name = utils.getComponentProtected(potentialSignalEntity, api.type.ComponentType.NAME)
 						local values = parseName(string.gsub(name.name, " ", ""))
 
 						paramOverride = values
