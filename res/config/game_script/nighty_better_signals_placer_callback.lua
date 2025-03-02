@@ -179,7 +179,7 @@ function data()
 						signalState.connectedSignal = string.match(key, "%d+$")
 						zone.markEntity("connectedSignal", tonumber(signalState.connectedSignal), 1, {0, 1, 0, 1})
 					elseif key == "signal" .. param.entityId then
-						local modelInstance = utils.getComponentProtected(param.entityId, 58)
+						local modelInstance = utils.getComponentProtected(param.entityId, api.type.ComponentType.MODEL_INSTANCE_LIST)
 						if modelInstance then
 							local transf = modelInstance.fatInstances[1].transf
 							if transf then

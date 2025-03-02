@@ -4,7 +4,7 @@ local utils =  {}
 -- @param edgeId reference to edge
 -- @return returns speed as number or math.huge if speed can't be evaluated
 function utils.getEdgeSpeed(edgeId)
-	local transportNetwork = utils.getComponentProtected(edgeId.entity, 52)
+	local transportNetwork = utils.getComponentProtected(edgeId.entity, api.type.ComponentType.TRANSPORT_NETWORK)
 	local speed = math.huge
 	if not (transportNetwork == nil) then
 		local index = 1 + edgeId.index
