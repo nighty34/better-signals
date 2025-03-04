@@ -172,7 +172,7 @@ function BetterSignal:getChecksum()
     if self.nextSignal then
         checksum = self.nextSignal:getChecksum()
     end
-    return utils.checksum(self.entity, self.construction or 0 ,self.signal_state*3, self.signal_speed, checksum)
+    return utils.checksum(self.entity, self.construction or 0, self.signal_state, self.signal_speed, checksum)
 end
 
 return BetterSignal

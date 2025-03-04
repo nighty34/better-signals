@@ -192,11 +192,7 @@ local function updateSignalDataForTrain(train)
 					endSignal:setSignalState(false, 0, paramOverride, nil)
 					endSignal:setStation(true)
 
-					if lastEvaluated then
-						lastEvaluated:setPreviousSignal(endSignal)
-					end
-
-					table.insert(betterSignals.activeSignals, endSignal)
+					lastEvaluated = endSignal
 
 					segmentSpeed = math.huge
 				end
@@ -252,7 +248,7 @@ function betterSignals.updateSignalConstructions()
 				if currentSignal:isAnimated() then
 					signalConstruction.params.animationTimer = animationTimer.get()
 				end
-				
+
 				currentSignal:setChangedFlag()
 				-- signalConstruction.params.currentLine = signalPath.line
 
