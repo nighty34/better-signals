@@ -12,6 +12,7 @@ animationTimer.start()
 betterSignals.debugMode = false
 
 betterSignals.registeredSignals = {}
+betterSignals.activeSignals = {}
 betterSignals.blueprints = {}
 
 local function getRegisteredKey(signalEntity)
@@ -135,7 +136,6 @@ local function parseName(input)
 end
 
 local function updateSignalDataForTrain(train)
-
 	local move_path = utils.getComponentProtected(train, api.type.ComponentType.MOVE_PATH)
 	local pathViewDistance = signals.viewDistance
 	local segmentSpeed = math.huge
@@ -171,6 +171,7 @@ local function updateSignalDataForTrain(train)
 						end
 
 						registeredSignal:setSignalState(signal.state, segmentSpeed, paramOverride, lastEvaluated)
+						table.insert(betterSignals.activeSignals, registeredSignal)
 						segmentSpeed = math.huge
 
 						paramOverride = {}
@@ -178,6 +179,7 @@ local function updateSignalDataForTrain(train)
 					elseif (signal.type == 0 or signal.type == 1) or (potentialSignalEntity and betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)]) then -- preSignal
 						local registeredSignal = betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)] or BetterSignal:new(potentialSignalEntity, nil, nil)
 						registeredSignal:setSignalState(signal.state, 0, {}, lastEvaluated)
+						table.insert(betterSignals.activeSignals, registeredSignal)
 
 					elseif signal.type == 2 then
 						local name = utils.getComponentProtected(potentialSignalEntity, api.type.ComponentType.NAME)
@@ -194,9 +196,27 @@ local function updateSignalDataForTrain(train)
 						lastEvaluated:setPreviousSignal(endSignal)
 					end
 
+					table.insert(betterSignals.activeSignals, endSignal)
+
 					segmentSpeed = math.huge
 				end
 			end
+		end
+	end
+end
+
+local function resetAllChangedSignals()
+	for _, value in pairs(betterSignals.registeredSignals) do
+		if value:isChanged() then
+			local construction = value:getConstruction()
+			if construction and construction.params then
+				construction.params.signal_state = 0
+				construction.params.previous_speed = 0
+
+				utils.updateConstruction(construction, value:getConstructionId())
+			end
+
+			value:resetChangedFlag()
 		end
 	end
 end
@@ -210,12 +230,10 @@ function betterSignals.updateSignalConstructions()
 		updateSignalDataForTrain(vehicle)
 	end
 
-	for _, signal in pairs(betterSignals.registeredSignals) do
+	for _, signal in pairs(betterSignals.activeSignals) do
 		local currentSignal = signal or BetterSignal:new(nil,nil,nil)
 
 		if currentSignal:isBetterSignal() then
-			currentSignal:setChangedFlag()
-
 			local signalConstruction = currentSignal:getConstruction()
 
 			if signalConstruction and signalConstruction.params then
@@ -229,10 +247,13 @@ function betterSignals.updateSignalConstructions()
 				signalConstruction.params.paramsOverride = currentSignal:getParamOverride()
 				signalConstruction.params.previous_speed = currentSignal:getPreviousSpeed()
 				signalConstruction.params.isStation = currentSignal:getIsStation()
-				
+				signalConstruction.params.changed = currentSignal:getChanged()
+
 				if currentSignal:isAnimated() then
 					signalConstruction.params.animationTimer = animationTimer.get()
 				end
+				
+				currentSignal:setChangedFlag()
 				-- signalConstruction.params.currentLine = signalPath.line
 
 				if (checksum ~= newChecksum) or currentSignal:isAnimated() then
@@ -242,6 +263,9 @@ function betterSignals.updateSignalConstructions()
 			end
 		end
 	end
+
+	betterSignals.activeSignals = {}
+	resetAllChangedSignals()
 end
 
 function betterSignals.load(signals)

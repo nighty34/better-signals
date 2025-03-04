@@ -93,6 +93,10 @@ function BetterSignal:getAsFollowingSignal()
     end
 end
 
+function BetterSignal:isChanged()
+    return self.changed == 2
+end
+
 function BetterSignal:getConstructionId()
     return self.construction
 end
@@ -155,8 +159,12 @@ function BetterSignal:setChangedFlag()
     self.changed = 1
 end
 
-function BetterSignal:getAnimationTimer()
-    return animationTimer.round()
+function BetterSignal:resetChangedFlag()
+    self.changed = 0
+end
+
+function BetterSignal:getChanged()
+    return self.changed
 end
 
 function BetterSignal:getChecksum()
@@ -164,7 +172,7 @@ function BetterSignal:getChecksum()
     if self.nextSignal then
         checksum = self.nextSignal:getChecksum()
     end
-    return utils.checksum(self.entity, self.construction or 0 ,self.signal_state, self.signal_speed, checksum)
+    return utils.checksum(self.entity, self.construction or 0 ,self.signal_state*3, self.signal_speed, checksum)
 end
 
 return BetterSignal
