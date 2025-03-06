@@ -20,7 +20,7 @@ function SignalBlueprint:fromParameters(name, parameters)
 
     return self:new(
         name,
-        parameters.signalType or "main",
+        parameters.type or "main",
         parameters.isAnimated or false,
         parameters.preSignalTriggerKey or nil,
         parameters.preSignalTriggerValue or nil
