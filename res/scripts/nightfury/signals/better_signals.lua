@@ -47,22 +47,27 @@ function betterSignals.addBlueprint(con_name, parameters)
 end
 
 local function isSignal (signal, potentialSignal)
-	if betterSignals.registeredSignals[getRegisteredKey(potentialSignal)] then
-		local signal = betterSignals.registeredSignals[getRegisteredKey(potentialSignal)]
+	local better_signal = betterSignals.registeredSignals[getRegisteredKey(potentialSignal)]
+	if better_signal then
+		local signalBluePrint = better_signal:getBluePrint()
 
-		local isHybrid = false
-		local params = signal:getConstructionParameters()
-		local signalBluePrint = signal:getBluePrint()
-
-		if signalBluePrint and (signalBluePrint:getType() == "hybrid") and params then
-			isHybrid = params[signalBluePrint:getPreSignalTiggerKey()] == signalBluePrint:getPreSignalTiggerValue()
-			if isHybrid then
+		if signalBluePrint then
+			local signalType = string.lower(signalBluePrint:getType())
+			if signalType == "main" then
+				return true
+			elseif signalType == "pre" then
 				return false
+			elseif signalType == "hybrid" then
+				local construction = better_signal:getConstruction()
+
+				if construction and construction.params then
+					return not (construction.params[signalBluePrint:getPreSignalTiggerKey()] == signalBluePrint:getPreSignalTriggerValue())
+				end
 			end
 		end
 	end
 
-	return (signal.type == 0 or signal.type == 1) or ((potentialSignal and betterSignals.registeredSignals[getRegisteredKey(potentialSignal)]))
+	return (signal.type == 0 or signal.type == 1)
 end
 
 local function getAllVisibleVehicles()
@@ -176,10 +181,14 @@ local function updateSignalDataForTrain(train)
 
 						paramOverride = {}
 						lastEvaluated = registeredSignal
-					elseif (signal.type == 0 or signal.type == 1) or (potentialSignalEntity and betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)]) then -- preSignal
+					elseif (potentialSignalEntity and betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)]) then -- preSignal
 						local registeredSignal = betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)] or BetterSignal:new(potentialSignalEntity, nil, nil)
 						registeredSignal:setSignalState(signal.state, 0, {}, lastEvaluated)
-						table.insert(betterSignals.activeSignals, registeredSignal)
+						registeredSignal:setPreSignal(true)
+						
+						if lastEvaluated then
+							lastEvaluated:addPreSignal(registeredSignal)
+						end
 
 					elseif signal.type == 2 then
 						local name = utils.getComponentProtected(potentialSignalEntity, api.type.ComponentType.NAME)
@@ -189,7 +198,7 @@ local function updateSignalDataForTrain(train)
 					end
 				elseif pathIndex == (#move_path.path.edges - move_path.path.endOffset) then -- Adding Trainstations
 					local endSignal = BetterSignal:new(0000, nil, nil)
-					endSignal:setSignalState(false, 0, paramOverride, nil)
+					endSignal:setSignalState(0, 0, paramOverride, nil)
 					endSignal:setStation(true)
 
 					lastEvaluated = endSignal
@@ -201,15 +210,39 @@ local function updateSignalDataForTrain(train)
 	end
 end
 
+local function updatePreSignals(preSignals, better_signal)
+	for _, preSignal in pairs(preSignals) do
+		local construction = preSignal:getConstruction()
+
+		if construction and construction.params then
+			construction.params.entity = better_signal:getEntity()
+			construction.params.signal_state = better_signal:getSignalState()
+			construction.params.signal_speed = better_signal:getSignalSpeed()
+			construction.params.following_signal = better_signal:getAsFollowingSignal()
+			construction.params.paramsOverride = better_signal:getParamOverride()
+			construction.params.previous_speed = better_signal:getPreviousSpeed()
+			construction.params.isStation = better_signal:getIsStation()
+			construction.params.changed = better_signal:getChanged()
+
+			utils.updateConstruction(construction, preSignal:getConstructionId())
+		end
+	end
+end
+
 local function resetAllChangedSignals()
 	for _, value in pairs(betterSignals.registeredSignals) do
 		if value:isChanged() then
 			local construction = value:getConstruction()
+
 			if construction and construction.params then
+				value:resetState()
+
 				construction.params.signal_state = 0
 				construction.params.previous_speed = 0
 
 				utils.updateConstruction(construction, value:getConstructionId())
+
+				updatePreSignals(value:getPreSignals(), value)
 			end
 
 			value:resetChangedFlag()
@@ -255,6 +288,7 @@ function betterSignals.updateSignalConstructions()
 				if (checksum ~= newChecksum) or currentSignal:isAnimated() then
 					signalConstruction.params.checksum = newChecksum
 					utils.updateConstruction(signalConstruction, currentSignal:getConstructionId())
+					updatePreSignals(currentSignal:getPreSignals(), currentSignal)
 				end
 			end
 		end

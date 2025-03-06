@@ -20,6 +20,7 @@ function BetterSignal:new(signal_entity, construction, signalBlueprint)
     obj.changed = 0
     obj.isStation = false
     obj.isPreSignal = false
+    obj.preSignals = {}
     return obj
 end
 
@@ -44,6 +45,11 @@ end
 
 function BetterSignal:getBluePrint()
     return self.signalBlueprint
+end
+
+function BetterSignal:resetState()
+    self.signal_state = 0
+    self.signal_speed = 0
 end
 
 function BetterSignal:getBluePrintName()
@@ -93,8 +99,24 @@ function BetterSignal:getAsFollowingSignal()
     end
 end
 
+function BetterSignal:addPreSignal(preSignal)
+    table.insert(self.preSignals, preSignal)
+end
+
+function BetterSignal:getPreSignals()
+    return self.preSignals
+end
+
+function BetterSignal:resetPreSignals()
+    self.preSignals = {}
+end
+
 function BetterSignal:isChanged()
     return self.changed == 2
+end
+
+function BetterSignal:setPreSignal(isPreSignal)
+    self.isPreSignal = isPreSignal
 end
 
 function BetterSignal:getConstructionId()
@@ -110,7 +132,10 @@ function BetterSignal:isBetterSignal()
 end
 
 function BetterSignal:getConstruction()
-    return game.interface.getEntity(self.construction)
+    if self.construction then
+        return game.interface.getEntity(self.construction)
+    end
+    return nil
 end
 
 function BetterSignal:getConstructionParameters(onlyBuildingParams)
