@@ -95,9 +95,11 @@ function data()
 					if betterSignals.blueprints[key] == nil then
 						print("BetterSignals - Signal " .. key .. " is depricated - please update to the new blueprint registration")
 						betterSignals.addBlueprint(
-							key, {
+							tostring(key), {
 								type = value.type,
 								isAnimated = value.isAnimated,
+								preSignalTriggerKey = value.preSignalTriggerKey,
+								preSignalTriggerValue = value.preSignalTriggerValue,
 							}
 						)
 					end
@@ -113,8 +115,8 @@ function data()
 				print("Better Signals - Finish Migration")
 
 				betterSignals.load(betterSignals.registeredSignals)
-				commonapi.dmp(betterSignals.registeredSignals)
 			end
+
 			local success, errorMessage = pcall(betterSignals.updateSignalConstructions)
 		
 			if success then
