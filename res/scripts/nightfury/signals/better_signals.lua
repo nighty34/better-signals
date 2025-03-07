@@ -20,7 +20,7 @@ local function getRegisteredKey(signalEntity)
 end
 
 function betterSignals.createSignal(signal_entity, construction, signalBlueprint)
-	if signalBlueprint.__type ~= SignalBluePrint.__type then
+	if signalBlueprint and (signalBlueprint.__type ~= SignalBluePrint.__type) then
 		print("Not a SignalBlueprint")
 		return
 	end
