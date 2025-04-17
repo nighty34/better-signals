@@ -20,6 +20,7 @@ function BetterSignal:new(signal_entity, construction, signalBlueprint)
     obj.changed = 0
     obj.isStation = false
     obj.isPreSignal = false
+    obj.cached_following_signal = {}
     obj.preSignals = {}
     return obj
 end
@@ -29,6 +30,9 @@ function BetterSignal:setSignalState(signal_state, signalSpeed, paramsOverride, 
     self.signal_speed = signalSpeed
     self.paramsOverride = paramsOverride
     self.nextSignal = nextSignal
+    if nextSignal then
+        self.cached_following_signal = nextSignal:getAsFollowingSignal(false)
+    end
 end
 
 function BetterSignal:setPreviousSignal(previousSignal)
@@ -77,7 +81,7 @@ function BetterSignal:getAsSavedEntry()
     }
 end
 
-function BetterSignal:getAsFollowingSignal()
+function BetterSignal:getAsFollowingSignal(useCached)
     if self.nextSignal then
         return {
             signal_state = self.nextSignal.signal_state,
@@ -86,7 +90,7 @@ function BetterSignal:getAsFollowingSignal()
             isStation = self.isStation,
             paramsOverride = self.nextSignal.paramsOverride,
             params = self:getConstructionParameters(true),
-            following_signal = self.nextSignal:getAsFollowingSignal()
+            following_signal = useCached and self.cached_following_signal or self.nextSignal:getAsFollowingSignal(false)
         }
     else
         return {

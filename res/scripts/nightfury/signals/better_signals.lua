@@ -145,7 +145,8 @@ local function updateSignalDataForTrain(train)
 	local pathViewDistance = signals.viewDistance
 	local segmentSpeed = math.huge
 
-	local lastEvaluated = nil
+	local lastEvaluated = BetterSignal:new(0000, nil, nil)
+	lastEvaluated:setSignalState(0,0, {}, nil)
 	local paramOverride = {}
 
 	if move_path and move_path.path then
@@ -218,7 +219,7 @@ local function updatePreSignals(preSignals, better_signal)
 			construction.params.entity = better_signal:getEntity()
 			construction.params.signal_state = better_signal:getSignalState()
 			construction.params.signal_speed = better_signal:getSignalSpeed()
-			construction.params.following_signal = better_signal:getAsFollowingSignal()
+			construction.params.following_signal = better_signal:getAsFollowingSignal(true)
 			construction.params.paramsOverride = better_signal:getParamOverride()
 			construction.params.previous_speed = better_signal:getPreviousSpeed()
 			construction.params.isStation = better_signal:getIsStation()
@@ -251,13 +252,17 @@ local function resetAllChangedSignals()
 end
 
 function betterSignals.updateSignalConstructions()
+	local statTimer = require "nightfury/signals/utils/timer"
+
 	for _, signal in pairs(betterSignals.registeredSignals) do
 		signal:moveChangedValue()
 	end
 
+	statTimer.start()
 	for _, vehicle in pairs(getAllVisibleVehicles()) do
 		updateSignalDataForTrain(vehicle)
 	end
+	print("Upadte Signal Data for all Trains: " .. statTimer.stop())
 
 	for _, signal in pairs(betterSignals.activeSignals) do
 		local currentSignal = signal or BetterSignal:new(nil,nil,nil)
@@ -272,7 +277,7 @@ function betterSignals.updateSignalConstructions()
 				signalConstruction.params.entity = currentSignal:getEntity()
 				signalConstruction.params.signal_state = currentSignal:getSignalState()
 				signalConstruction.params.signal_speed = currentSignal:getSignalSpeed()
-				signalConstruction.params.following_signal = currentSignal:getAsFollowingSignal()
+				signalConstruction.params.following_signal = currentSignal:getAsFollowingSignal(false)
 				signalConstruction.params.paramsOverride = currentSignal:getParamOverride()
 				signalConstruction.params.previous_speed = currentSignal:getPreviousSpeed()
 				signalConstruction.params.isStation = currentSignal:getIsStation()
@@ -293,7 +298,7 @@ function betterSignals.updateSignalConstructions()
 			end
 		end
 	end
-
+	
 	betterSignals.activeSignals = {}
 	resetAllChangedSignals()
 end
