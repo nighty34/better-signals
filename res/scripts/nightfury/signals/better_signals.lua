@@ -153,6 +153,8 @@ local function updateSignalDataForTrain(train)
 		local pathStart = math.max((move_path.dyn.pathPos.edgeIndex - 6), 1)
 		local pathEnd = math.min(#move_path.path.edges, pathStart + pathViewDistance)
 
+		local wasLastRed = true
+
 		for pathIndex = pathEnd, pathStart, -1 do
 			local currentEdge = move_path.path.edges[pathIndex]
 
@@ -182,6 +184,16 @@ local function updateSignalDataForTrain(train)
 
 						paramOverride = {}
 						lastEvaluated = registeredSignal
+
+						if wasLastRed and signal.state == 1 then
+							local emptySignal = BetterSignal:new(0000, nil, nil)
+							emptySignal:setSignalState(0,0, {}, nil)
+							lastEvaluated:setNextSignal(emptySignal)
+						end
+
+						if signal.state == 1 then
+							wasLastRed = false
+						end 
 					elseif (potentialSignalEntity and betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)]) then -- preSignal
 						local registeredSignal = betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)] or BetterSignal:new(potentialSignalEntity, nil, nil)
 						registeredSignal:setSignalState(signal.state, 0, {}, lastEvaluated)
@@ -216,10 +228,11 @@ local function updatePreSignals(preSignals, better_signal)
 		local construction = preSignal:getConstruction()
 
 		if construction and construction.params then
+			construction.params.isPreSignal = true
 			construction.params.entity = better_signal:getEntity()
 			construction.params.signal_state = better_signal:getSignalState()
 			construction.params.signal_speed = better_signal:getSignalSpeed()
-			construction.params.following_signal = better_signal:getAsFollowingSignal(true)
+			construction.params.following_signal = better_signal:getAsFollowingSignal(false)
 			construction.params.paramsOverride = better_signal:getParamOverride()
 			construction.params.previous_speed = better_signal:getPreviousSpeed()
 			construction.params.isStation = better_signal:getIsStation()
@@ -262,7 +275,7 @@ function betterSignals.updateSignalConstructions()
 	for _, vehicle in pairs(getAllVisibleVehicles()) do
 		updateSignalDataForTrain(vehicle)
 	end
-	print("Upadte Signal Data for all Trains: " .. statTimer.stop())
+--	print("Upadte Signal Data for all Trains: " .. statTimer.stop())
 
 	for _, signal in pairs(betterSignals.activeSignals) do
 		local currentSignal = signal or BetterSignal:new(nil,nil,nil)
@@ -305,7 +318,16 @@ end
 
 function betterSignals.load(signals)
 	for key, entry in pairs(signals) do
-		local newSignal = BetterSignal:new(entry.entity, entry.construction, betterSignals.getBlueprintByName(entry.signalBlueprintName))
+		local bluePrintName = entry.signalBlueprintName
+		if not bluePrintName then
+			local entity = game.interface.getEntity(entry.construction)
+			if entity and entity.fileName then
+				bluePrintName = string.match(entity.fileName, "([^/]+)%.con$")
+				print("Trying to convert signal " .. key .. " to blueprint: " .. bluePrintName .. "based on construction name")
+			end
+		end
+
+		local newSignal = BetterSignal:new(entry.entity, entry.construction, betterSignals.getBlueprintByName(bluePrintName))
 		betterSignals.registeredSignals[key] = newSignal
 	end
 end

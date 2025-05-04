@@ -43,6 +43,10 @@ function BetterSignal:setStation(isStation)
     self.isStation = isStation
 end
 
+function BetterSignal:setNextSignal(signal)
+    self.nextSignal = signal
+end
+
 function BetterSignal:getEntity()
     return self.entity
 end
