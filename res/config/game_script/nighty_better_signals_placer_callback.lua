@@ -93,7 +93,7 @@ function data()
 				-- depricated - remove as soon as all mods are updated
 				for key, value in pairs(signals.signals) do
 					if betterSignals.blueprints[key] == nil then
-						print("BetterSignals - Signal " .. key .. " is depricated - please update to the new blueprint registration")
+						print("Better Signals - Signal " .. key .. " is depricated - please update to the new blueprint registration")
 						betterSignals.addBlueprint(
 							tostring(key), {
 								type = value.type,
@@ -119,13 +119,10 @@ function data()
 
 			local success, errorMessage = pcall(betterSignals.updateSignalConstructions)
 		
-			if success then
-			else
+			if not success then
+				print("Better Signals - Error:")
 				print(errorMessage)
 			end
-		end,
-		guiInit = function ()
-			print("guiInit")
 		end,
 		guiUpdate = function()
 			local controller = api.gui.util.getGameUI():getMainRendererComponent():getCameraController()
@@ -146,7 +143,7 @@ function data()
 					param.blueprint = betterSignals.blueprints[param.signalType]
 					betterSignals.createSignal(r_signal, param.construction, param.blueprint)
 				else
-					print("No Signal Found")
+					print("Better Signals - No Signal Found")
 				end
 			elseif name == "signals.load" then
 
@@ -249,7 +246,7 @@ function data()
 							params.matchedObjects = matchedObjects
 							game.interface.sendScriptEvent("__signalEvent__", "signals.rebuild", params)
 						else
-							print("Added and Removed EdgeObjects aren't the same")
+							print("Better Signals - Added and Removed EdgeObjects aren't the same")
 						end
 					end
 				end

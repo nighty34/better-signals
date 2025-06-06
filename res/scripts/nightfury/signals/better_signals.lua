@@ -24,12 +24,12 @@ end
 
 function betterSignals.createSignal(signal_entity, construction, signalBlueprint)
 	if signalBlueprint and (signalBlueprint.__type ~= SignalBluePrint.__type) then
-		print("Not a SignalBlueprint")
+		print("Better Signals - Not a SignalBlueprint")
 		return
 	end
 
 	betterSignals.registeredSignals[getRegisteredKey(signal_entity)] = BetterSignal:new(signal_entity, construction, signalBlueprint)
-	print("Registered new Signal")
+	print("Better Signals - Registered new Signal")
 end
 
 function betterSignals.unregisterSignal(signal_entity)
@@ -144,8 +144,7 @@ local function updateSignalDataForTrain(train)
 	local pathViewDistance = signals.viewDistance
 	local segmentSpeed = math.huge
 
-	local lastEvaluated = EMPTY_SIGNAL -- BetterSignal:new(0000, nil, nil)
-	-- lastEvaluated:setSignalState(0,0, {}, nil)
+	local lastEvaluated = EMPTY_SIGNAL
 	local paramOverride = {}
 
 	if move_path and move_path.path then
@@ -185,8 +184,7 @@ local function updateSignalDataForTrain(train)
 						lastEvaluated = registeredSignal
 
 						if wasLastRed and signal.state == 1 then
-							local emptySignal = EMPTY_SIGNAL -- BetterSignal:new(0000, nil, nil)
-							-- emptySignal:setSignalState(0,0, {}, nil)
+							local emptySignal = EMPTY_SIGNAL
 							lastEvaluated:setNextSignal(emptySignal)
 						end
 
@@ -194,7 +192,7 @@ local function updateSignalDataForTrain(train)
 							wasLastRed = false
 						end 
 					elseif (potentialSignalEntity and betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)]) then -- preSignal
-						local registeredSignal = betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)] or EMPTY_SIGNAL -- BetterSignal:new(potentialSignalEntity, nil, nil)
+						local registeredSignal = betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)] or EMPTY_SIGNAL
 						registeredSignal:setSignalState(signal.state, 0, {}, lastEvaluated)
 						registeredSignal:setPreSignal(true)
 						
@@ -274,10 +272,9 @@ function betterSignals.updateSignalConstructions()
 	for _, vehicle in pairs(getAllVisibleVehicles()) do
 		updateSignalDataForTrain(vehicle)
 	end
---	print("Upadte Signal Data for all Trains: " .. statTimer.stop())
 
 	for _, signal in pairs(betterSignals.activeSignals) do
-		local currentSignal = signal or EMPTY_SIGNAL -- BetterSignal:new(nil,nil,nil)
+		local currentSignal = signal or EMPTY_SIGNAL
 
 		if currentSignal:isBetterSignal() then
 			local signalConstruction = currentSignal:getConstruction()
@@ -322,7 +319,7 @@ function betterSignals.load(signals)
 			local entity = game.interface.getEntity(entry.construction)
 			if entity and entity.fileName then
 				bluePrintName = string.match(entity.fileName, "([^/]+)%.con$")
-				print("Trying to convert signal " .. key .. " to blueprint: " .. bluePrintName .. "based on construction name")
+				print("Better Signals - Trying to convert signal " .. key .. " to blueprint: " .. bluePrintName .. "based on construction name")
 			end
 		end
 
@@ -340,7 +337,7 @@ function betterSignals.save()
 			end
 		end
 	else
-		print("BetterSignals - Registered Signals is 0")
+		print("Better Signals - Registered Signals is 0")
 		betterSignals.registeredSignals = {}
 	end
 
