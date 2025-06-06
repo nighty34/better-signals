@@ -1,6 +1,5 @@
 local utils = require "nightfury/signals/utils"
 
-
 BetterSignal = {}
 BetterSignal.__index = BetterSignal
 BetterSignal.__type = "BetterSignal"
@@ -27,7 +26,7 @@ end
 
 function BetterSignal:setSignalState(signal_state, signalSpeed, paramsOverride, nextSignal)
     self.signal_state = signal_state
-    self.signal_speed = signalSpeed
+    self.signal_speed = math.floor(signalSpeed)
     self.paramsOverride = paramsOverride
     self.nextSignal = nextSignal
     if nextSignal then
@@ -177,7 +176,7 @@ function BetterSignal:getPreviousSpeed()
 end
 
 function BetterSignal:getSignalSpeed()
-    return math.floor(self.signal_speed)
+    return self.signal_speed
 end
 
 function BetterSignal:getParamOverride()
