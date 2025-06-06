@@ -6,6 +6,9 @@ local zone = require "nightfury/signals/zone"
 local animationTimer = require "nightfury/signals/utils/timer"
 
 local betterSignals = {}
+local EMPTY_SIGNAL = BetterSignal:new(0000, nil, nil)
+
+EMPTY_SIGNAL:setSignalState(0,0, {}, nil)
 
 animationTimer.start()
 
@@ -145,8 +148,8 @@ local function updateSignalDataForTrain(train)
 	local pathViewDistance = signals.viewDistance
 	local segmentSpeed = math.huge
 
-	local lastEvaluated = BetterSignal:new(0000, nil, nil)
-	lastEvaluated:setSignalState(0,0, {}, nil)
+	local lastEvaluated = EMPTY_SIGNAL -- BetterSignal:new(0000, nil, nil)
+	-- lastEvaluated:setSignalState(0,0, {}, nil)
 	local paramOverride = {}
 
 	if move_path and move_path.path then
@@ -186,8 +189,8 @@ local function updateSignalDataForTrain(train)
 						lastEvaluated = registeredSignal
 
 						if wasLastRed and signal.state == 1 then
-							local emptySignal = BetterSignal:new(0000, nil, nil)
-							emptySignal:setSignalState(0,0, {}, nil)
+							local emptySignal = EMPTY_SIGNAL -- BetterSignal:new(0000, nil, nil)
+							-- emptySignal:setSignalState(0,0, {}, nil)
 							lastEvaluated:setNextSignal(emptySignal)
 						end
 
@@ -195,7 +198,7 @@ local function updateSignalDataForTrain(train)
 							wasLastRed = false
 						end 
 					elseif (potentialSignalEntity and betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)]) then -- preSignal
-						local registeredSignal = betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)] or BetterSignal:new(potentialSignalEntity, nil, nil)
+						local registeredSignal = betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)] or EMPTY_SIGNAL -- BetterSignal:new(potentialSignalEntity, nil, nil)
 						registeredSignal:setSignalState(signal.state, 0, {}, lastEvaluated)
 						registeredSignal:setPreSignal(true)
 						
@@ -278,7 +281,7 @@ function betterSignals.updateSignalConstructions()
 --	print("Upadte Signal Data for all Trains: " .. statTimer.stop())
 
 	for _, signal in pairs(betterSignals.activeSignals) do
-		local currentSignal = signal or BetterSignal:new(nil,nil,nil)
+		local currentSignal = signal or EMPTY_SIGNAL -- BetterSignal:new(nil,nil,nil)
 
 		if currentSignal:isBetterSignal() then
 			local signalConstruction = currentSignal:getConstruction()
