@@ -113,11 +113,7 @@ local function getAllVisibleVehicles()
 end
 
 function betterSignals.getBlueprintByName(name)
-	for _, entry in pairs(betterSignals.blueprints) do
-		if entry:getName() == name then
-			return entry
-		end
-	end
+	return betterSignals.blueprints[name]
 end
 
 local function parseName(input)
