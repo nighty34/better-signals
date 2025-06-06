@@ -89,14 +89,14 @@ local function getAllVisibleVehicles()
 				local newTrains = game.interface.getEntities({pos = {trackedPos[1], trackedPos[2]}, radius = trainActivationRange}, {type = "VEHICLE"})
 				if newTrains and #newTrains > 0 then
 					for _, newTrain in pairs(newTrains) do
-						if not utils.contains(vehicles, newTrain) then
+						if not vehicles[newTrain] then
 							table.insert(vehicles, newTrain)
 						end
 					end
 				end
 			end
 		else
-			if utils.contains(signals.trackedEntities, trackedTrain) then
+			if signals.trackedEntities[trackedTrain] then
 				utils.removeFromTableByValue(signals.trackedEntities, trackedTrain)
 			end
 		end
