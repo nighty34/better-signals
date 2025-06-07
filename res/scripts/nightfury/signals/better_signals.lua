@@ -166,7 +166,10 @@ local function updateSignalDataForTrain(train)
 					local signal = signalComponent.signals[1]
 					if (isSignal(signal, potentialSignalEntity)) then
 
-						local registeredSignal = betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)] or BetterSignal:new(potentialSignalEntity, nil, nil)
+						local registeredSignal = betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)]
+						if not registeredSignal then
+							registeredSignal = BetterSignal:new(potentialSignalEntity, nil, nil)
+						end
 
 						if lastEvaluated then -- since the path is rolled up from end to start - the last Signal gets this signal registered as the previous one.
 							lastEvaluated:setPreviousSignal(registeredSignal)
@@ -190,7 +193,7 @@ local function updateSignalDataForTrain(train)
 
 						if signal.state == 1 then
 							wasLastRed = false
-						end 
+						end
 					elseif (potentialSignalEntity and betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)]) then -- preSignal
 						local registeredSignal = betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)] or EMPTY_SIGNAL
 						registeredSignal:setSignalState(signal.state, 0, {}, lastEvaluated)
