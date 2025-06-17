@@ -90,9 +90,9 @@ function BetterSignal:getAsFollowingSignal(useCached)
             signal_state = self.nextSignal.signal_state,
             signal_speed = self.nextSignal.signal_speed,
             previous_speed = self.signal_speed,
-            isStation = self.isStation,
+            isStation = self.nextSignal.isStation,
             paramsOverride = self.nextSignal.paramsOverride,
-            params = self:getConstructionParameters(true),
+            params = self.nextSignal:getConstructionParameters(true),
             following_signal = useCached and self.cached_following_signal or self.nextSignal:getAsFollowingSignal(false)
         }
     else
