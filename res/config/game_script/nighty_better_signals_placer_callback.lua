@@ -145,8 +145,8 @@ function data()
 				else
 					print("Better Signals - No Signal Found")
 				end
-			elseif name == "signals.load" then
-
+			elseif name == "game.isRunning" then
+				betterSignals.gameIsRunning = param.isRunning
 			elseif name == "builder.proposalCreate" then
 				signalState.signalIndex = math.abs(param.selection*5)
 				signalState.possibleSignals = game.interface.getEntities({radius=10,pos={param.position[1],param.position[2]}}, { type = "SIGNAL" })
@@ -280,7 +280,11 @@ function data()
 					end
 				end
 			end
-			if id == "bulldozer" then
+			if id == "menu.speedButton0" then
+				game.interface.sendScriptEvent("__signalEvent__", "game.isRunning", {isRunning = false})
+			end
+			if id == "menu.speedButton1" or id == "menu.speedButton2" or id == "menu.speedButton3" then
+				game.interface.sendScriptEvent("__signalEvent__", "game.isRunning", {isRunning = true})
 			end
 			if name == "visibilityChange" and param == false then
 				local signal = string.match(id, "^.+/(.+)%.con$")

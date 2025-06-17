@@ -17,6 +17,7 @@ betterSignals.debugMode = false
 betterSignals.registeredSignals = {}
 betterSignals.activeSignals = {}
 betterSignals.blueprints = {}
+betterSignals.gameIsRunning = true
 
 local function getRegisteredKey(signalEntity)
 	return "signal" .. signalEntity
@@ -265,13 +266,11 @@ local function resetAllChangedSignals()
 end
 
 function betterSignals.updateSignalConstructions()
-	local statTimer = require "nightfury/signals/utils/timer"
 
 	for _, signal in pairs(betterSignals.registeredSignals) do
 		signal:moveChangedValue()
 	end
 
-	statTimer.start()
 	for _, vehicle in pairs(getAllVisibleVehicles()) do
 		updateSignalDataForTrain(vehicle)
 	end
@@ -300,9 +299,8 @@ function betterSignals.updateSignalConstructions()
 				end
 
 				currentSignal:setChangedFlag()
-				-- signalConstruction.params.currentLine = signalPath.line
 
-				if (checksum ~= newChecksum) or currentSignal:isAnimated() then
+				if (checksum ~= newChecksum) or (currentSignal:isAnimated() and betterSignals.gameIsRunning) then
 					signalConstruction.params.checksum = newChecksum
 					utils.updateConstruction(signalConstruction, currentSignal:getConstructionId())
 					updatePreSignals(currentSignal:getPreSignals(), currentSignal)
