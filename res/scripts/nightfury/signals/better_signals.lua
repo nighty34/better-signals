@@ -3,14 +3,11 @@ local utils = require "nightfury/signals/utils"
 local SignalBluePrint = require "nightfury/signals/model/signal_blueprint"
 local BetterSignal = require "nightfury/signals/model/better_signal"
 local zone = require "nightfury/signals/zone"
-local animationTimer = require "nightfury/signals/utils/timer"
 
 local betterSignals = {}
 local EMPTY_SIGNAL = BetterSignal:new(0000, nil, nil)
 
 EMPTY_SIGNAL:setSignalState(0,0, {}, nil)
-
-animationTimer.start()
 
 betterSignals.debugMode = false
 
@@ -295,7 +292,7 @@ function betterSignals.updateSignalConstructions()
 				signalConstruction.params.changed = currentSignal:getChanged()
 
 				if currentSignal:isAnimated() then
-					signalConstruction.params.animationTimer = animationTimer.get()
+					signalConstruction.params.animationTimer = api.engine.getComponent(api.engine.util.getWorld(), api.type.ComponentType.GAME_TIME).updateCount
 				end
 
 				currentSignal:setChangedFlag()
