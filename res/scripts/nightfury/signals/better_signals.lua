@@ -227,6 +227,8 @@ local function updatePreSignals(preSignals, better_signal)
 
 		if construction and construction.params then
 			construction.params.isPreSignal = true
+			construction.params.main_signal = {}
+			construction.params.main_signal.params = better_signal:getConstructionParameters(true)
 			construction.params.entity = better_signal:getEntity()
 			construction.params.signal_state = better_signal:getSignalState()
 			construction.params.signal_speed = better_signal:getSignalSpeed()
