@@ -185,8 +185,7 @@ local function updateSignalDataForTrain(train)
 						lastEvaluated = registeredSignal
 
 						if wasLastRed and signal.state == 1 then
-							local emptySignal = EMPTY_SIGNAL
-							lastEvaluated:setNextSignal(emptySignal)
+							lastEvaluated:setNextSignal(EMPTY_SIGNAL)
 						end
 
 						if signal.state == 1 then
