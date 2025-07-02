@@ -205,7 +205,10 @@ local function updateSignalDataForTrain(train)
 						local name = utils.getComponentProtected(potentialSignalEntity, api.type.ComponentType.NAME)
 						local values = parseName(string.gsub(name.name, " ", ""))
 
-						paramOverride = values
+						for key, value in pairs(values) do
+							paramOverride[key] = value
+						end
+
 					end
 				elseif pathIndex == (#move_path.path.edges - move_path.path.endOffset) then -- Adding Trainstations
 					local endSignal = BetterSignal:new(0000, nil, nil)
