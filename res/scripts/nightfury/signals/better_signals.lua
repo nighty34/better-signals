@@ -81,7 +81,7 @@ local function getAllVisibleVehicles()
 
 	for _, trackedTrain in pairs(signals.trackedEntities) do
 		local tracked = game.interface.getEntity(trackedTrain)
-		if tracked then
+		if tracked and tracked.speed and tracked.speed > 0 then
 			local trackedPos = tracked.position
 			if trackedPos then
 				local newTrains = game.interface.getEntities({pos = {trackedPos[1], trackedPos[2]}, radius = trainActivationRange}, {type = "VEHICLE"})
