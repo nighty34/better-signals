@@ -196,7 +196,7 @@ local function updateSignalDataForTrain(train)
 						registeredSignal:setSignalState(signal.state, 0, {}, lastEvaluated)
 						registeredSignal:setPreSignal(true)
 						
-						if lastEvaluated then
+						if lastEvaluated and (lastEvaluated ~= EMPTY_SIGNAL) then
 							lastEvaluated:addPreSignal(registeredSignal)
 						end
 
