@@ -1,6 +1,7 @@
 ﻿function data()
 return {
 	de = {
+		["better_signals_debug_mode"] = ("Debug Modus"),
 		["nighty_no"] = ("Aus"),
 		["nighty_yes"] = ("An"),
 
@@ -20,6 +21,7 @@ return {
 		["better_signals_tunnel_helper_tooltip"] = ("Eine Hilfe, welche das Platzieren von Signalen in Tunnels vereinfachen soll."),
 	},
 	en = {
+		["better_signals_debug_mode"] = ("Debug Mode"),
 		["nighty_no"] = ("Off"),
 		["nighty_yes"] = ("On"),
 
