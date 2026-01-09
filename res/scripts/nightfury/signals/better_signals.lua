@@ -190,12 +190,15 @@ local function updateSignalDataForTrain(train)
 
 						if signal.state == 1 then
 							wasLastRed = false
+							registeredSignal:setOccupied(true)
+						else
+							registeredSignal:setOccupied(false)
 						end
 					elseif (potentialSignalEntity and betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)]) then -- preSignal
 						local registeredSignal = betterSignals.registeredSignals[getRegisteredKey(potentialSignalEntity)] or EMPTY_SIGNAL
 						registeredSignal:setSignalState(signal.state, 0, {}, lastEvaluated)
 						registeredSignal:setPreSignal(true)
-						
+
 						if lastEvaluated and (lastEvaluated ~= EMPTY_SIGNAL) then
 							lastEvaluated:addPreSignal(registeredSignal)
 						end
@@ -239,6 +242,7 @@ local function updatePreSignals(preSignals, better_signal)
 			construction.params.previous_speed = better_signal:getPreviousSpeed()
 			construction.params.isStation = better_signal:getIsStation()
 			construction.params.changed = better_signal:getChanged()
+			construction.params.isOccupied = better_signal:isOccupied()
 
 			utils.updateConstruction(construction, preSignal:getConstructionId())
 		end
@@ -293,6 +297,7 @@ function betterSignals.updateSignalConstructions()
 				signalConstruction.params.paramsOverride = currentSignal:getParamOverride()
 				signalConstruction.params.previous_speed = currentSignal:getPreviousSpeed()
 				signalConstruction.params.isStation = currentSignal:getIsStation()
+				signalConstruction.params.isOccupied = currentSignal:isOccupied()
 				signalConstruction.params.changed = currentSignal:getChanged()
 
 				if currentSignal:isAnimated() then

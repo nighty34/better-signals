@@ -21,6 +21,7 @@ function BetterSignal:new(signal_entity, construction, signalBlueprint)
     obj.isPreSignal = false
     obj.cached_following_signal = {}
     obj.preSignals = {}
+    obj.occupied = false
     return obj
 end
 
@@ -34,6 +35,10 @@ function BetterSignal:setSignalState(signal_state, signalSpeed, paramsOverride, 
     end
 end
 
+function BetterSignal:setOccupied(isOccupied)
+    self.occupied = isOccupied
+end
+
 function BetterSignal:setPreviousSignal(previousSignal)
     self.previousSignal = previousSignal
 end
@@ -44,6 +49,10 @@ end
 
 function BetterSignal:setNextSignal(signal)
     self.nextSignal = signal
+end
+
+function BetterSignal:isOccupied()
+    return self.occupied
 end
 
 function BetterSignal:getEntity()
@@ -90,6 +99,7 @@ function BetterSignal:getAsFollowingSignal(useCached)
             signal_state = self.nextSignal.signal_state,
             signal_speed = self.nextSignal.signal_speed,
             previous_speed = self.signal_speed,
+            isOccupied = self.nextSignal.occupied,
             isStation = self.nextSignal.isStation,
             paramsOverride = self.nextSignal.paramsOverride,
             params = self.nextSignal:getConstructionParameters(true),
@@ -101,6 +111,7 @@ function BetterSignal:getAsFollowingSignal(useCached)
             signal_speed = 0,
             previous_speed = self.signal_speed,
             isStation = true, -- todo
+            isOccupied = false,
             paramsOverride = {}
         }
     end
@@ -157,6 +168,7 @@ function BetterSignal:getConstructionParameters(onlyBuildingParams)
                 construction.params.isStation = nil
                 construction.params.previous_speed = nil
                 construction.params.checksum = nil
+                construction.params.isOccupied = nil
             end
             return construction.params
         end
