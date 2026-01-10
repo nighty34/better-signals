@@ -1,4 +1,8 @@
 local migrator = {}
+local utils = require "nightfury/signals/utils"
+local betterSignals = require "nightfury/signals/better_signals"
+
+migrator.currentHighestVersion = 3
 
 
 function migrator.migrate(currentVersion, signalObjects)
@@ -44,6 +48,31 @@ function migrator.migrate(currentVersion, signalObjects)
 
             currentVersion = 2
         end
+
+        if currentVersion == 2 then
+            print("Restructure to work with rewritten code")
+            local result = {}
+            for key, signal in pairs(signalObjects) do
+                local construction = nil
+                if signal and signal.signals then
+                    if signal.signals[0] ~= nil then
+                        construction = signal.signals[0].construction
+                    elseif signal.signals[1] ~= nil then
+                        construction = signal.signals[1].construction
+                    end
+                end
+
+                if construction ~= nil then
+                    result[key] = BetterSignal:new(utils.extract_number(key), construction, betterSignals.getBlueprintByName(signal.signalType))
+                end
+            end
+
+            signalObjects = result
+
+            currentVersion = 3
+        end
+    else
+        return migrator.currentHighestVersion, {}
     end
 
     return currentVersion, signalObjects
