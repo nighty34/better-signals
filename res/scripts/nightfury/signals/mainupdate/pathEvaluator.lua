@@ -48,10 +48,12 @@ function pathEvaluator.evaluate(vehicleId,  lookAheadEdges, signalsToEvaluate, t
 	for i = 1, #signalsInPath, 1 do
 		local signalAndBlock = signalsInPath[i]
 
+		local nextSignalIsRedWaypoint = pathEvaluator.nextSignalIsRedWaypoint(signalsInPath, i)
+
 		local signalState = SIGNAL_STATE_RED
 		if signalAndBlock.isStation == false then
 			-- Recalculate signal state to make more signals green
-			signalState = pathEvaluator.recalcSignalState(signalAndBlock, trainLocsEdgeEntityIds, i==#signalsInPath, signalAndBlock.hasSwitch)
+			signalState = pathEvaluator.recalcSignalState(signalAndBlock, trainLocsEdgeEntityIds, i==#signalsInPath, signalAndBlock.hasSwitch, nextSignalIsRedWaypoint)
 		end
 
 		local signalPath = {}
@@ -64,14 +66,15 @@ function pathEvaluator.evaluate(vehicleId,  lookAheadEdges, signalsToEvaluate, t
 
 		local prevSignalState = SIGNAL_STATE_RED
 		if #mainSignals >0 then
-			signalPath.previous_speed = mainSignals[#mainSignals].signal_speed
-			mainSignals[#mainSignals].following_signal = signalPath
-			prevSignalState = mainSignals[#mainSignals].signal_state
+			local lastSignal = mainSignals[#mainSignals]
+			signalPath.previous_speed = lastSignal.signal_speed
+			lastSignal.following_signal = signalPath
+			prevSignalState = lastSignal.signal_state
 		end
 
 		table.insert(mainSignals, signalPath)
 
-		if signalState == SIGNAL_STATE_RED and (signalAndBlock.hasSwitch or prevSignalState == SIGNAL_STATE_GREEN) then
+		if signalState == SIGNAL_STATE_RED and (signalAndBlock.hasSwitch or prevSignalState == SIGNAL_STATE_GREEN or nextSignalIsRedWaypoint) then
 			-- We stop early on this red because no point in evaluating beyond the switch or we've hit a red after having a green signals. 
 			-- Note we can't be efficent and just stop when we hit a red as the game tells us the train position with a lag from what is displayed on screen: so we may have multiple red signals before we get our first green signal
 			utils.debugPrint("stopping early")
@@ -263,11 +266,12 @@ end
 ---@param trainLocsEdgeEntityIds any -- edgeEntityIds of location of nearby trains
 ---@param isLast boolean -- If last signal that has been evaluated unsafe to treat red as green
 ---@param protectsSwitch boolean -- If the signal protects a switch
+---@param nextSignalIsRedWaypoint boolean -- If the next signal is a red waypoint
 ---@return number -- signal state. 1 is green, 0 is red
-function pathEvaluator.recalcSignalState(block, trainLocsEdgeEntityIds, isLast, protectsSwitch)
+function pathEvaluator.recalcSignalState(block, trainLocsEdgeEntityIds, isLast, protectsSwitch, nextSignalIsRedWaypoint)
 	local signal = block.signalComp.signals[1]
 
-	if signal.state == SIGNAL_STATE_GREEN or isLast or protectsSwitch then
+	if signal.state == SIGNAL_STATE_GREEN or isLast or protectsSwitch or nextSignalIsRedWaypoint then
 		return signal.state
 	end
 
@@ -280,6 +284,17 @@ function pathEvaluator.recalcSignalState(block, trainLocsEdgeEntityIds, isLast, 
 	else
 		return signal.state
 	end
+end
+
+function pathEvaluator.nextSignalIsRedWaypoint(signalsInPath, curIdx)
+	if curIdx < #signalsInPath then
+		local nextSignalAndBlock = signalsInPath[curIdx+1]
+		if nextSignalAndBlock.isStation == false then
+			local nextSignal = nextSignalAndBlock.signalComp.signals[1]
+			return nextSignal.type == SIGNAL_WAYPOINT and nextSignal.state == SIGNAL_STATE_RED
+		end
+	end
+	return false
 end
 
 function pathEvaluator.hasTrainInPath(edgesTable, trainLocsEdgeIds)
