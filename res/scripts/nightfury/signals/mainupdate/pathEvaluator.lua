@@ -138,7 +138,7 @@ function pathEvaluator.findSignalsInPath(path, lookAheadEdges, signalsToEvaluate
 			local currentEdge = path.path.edges[pathIndex]
 			local edgeEntityId = currentEdge.edgeId.entity
 
-			local transportNetwork = utils.getComponentProtected(currentEdge.edgeId.entity, api.type.ComponentType.TRANSPORT_NETWORK)
+			local transportNetwork = utils.getComponentProtected(edgeEntityId, api.type.ComponentType.TRANSPORT_NETWORK)
 			if transportNetwork == nil then
 				utils.debugPrint("Unexpected exit of pathEvaluator.findSignalsInPath as transport network doesn't exist")
 				return blocks
@@ -147,8 +147,9 @@ function pathEvaluator.findSignalsInPath(path, lookAheadEdges, signalsToEvaluate
 			local speed = math.floor(utils.getEdgeSpeed(currentEdge.edgeId, transportNetwork))
 
 			if #blocks > 0 then
-				blocks[#blocks].minSpeed = math.min(blocks[#blocks].minSpeed, speed)
-				blocks[#blocks].hasSwitch = pathEvaluator.isAfterSwitch(transportNetwork)
+				local lastBlock = blocks[#blocks]
+				lastBlock.minSpeed = math.min(lastBlock.minSpeed, speed)
+				lastBlock.hasSwitch = lastBlock.hasSwitch or pathEvaluator.isAfterSwitch(transportNetwork)
 			end
 
 			-- FYI sometimes the edgeId is duplicated in the path (seems when there is a signal on the edge). dir is needed to identify which one has signal
