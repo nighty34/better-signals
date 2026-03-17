@@ -1,161 +1,230 @@
+local trainHelper = require "nightfury/signals/mainupdate/trainHelper"
+local pathEvaluator = require "nightfury/signals/mainupdate/pathEvaluator"
 local utils = require "nightfury/signals/utils"
-local zone = require "nightfury/signals/zone"
-local signals = {}
 
+local config_lookAheadEdges = 100
+local config_cameraRadiusSignalVisibleAt = 500 -- Can't see signal when camera radius is > 500
+
+
+-- 3 states: None, Changed, WasChanged
+local BETTER_SIGNAL_NO_CHANGE = 0
+local BETTER_SIGNAL_CHANGED = 1
+local BETTER_SIGNAL_WAS_CHANGED = 2
+
+
+local signals = {}
 signals.signals = {}
 -- Table holds all placed Signals
 signals.signalObjects = {}
+signals.viewDistance = 2000
+signals.targetNoToEval = 4
+signals.pos = {0,0} -- Updated by event
+signals.posRadius = 1000 -- Updated by event
+signals.cockpitMode = false
+signals.cockpitTrainEntityId = nil
+signals.cockpitModeAtTime = nil -- We lock the cockpit mode for 2 seconds to prevent a race condition 
+-- where a late arriving camera move makes us think we're out of cockpitMode
 
-signals.signalIndex = 0
+----------------------
+--GUI Location Update!
+--In cockpitMode the location Gui camera doesn't change but we can use the location of the train
+--TODO: Maybe move this section to it's own file?
 
-signals.pos = {0,0}
-signals.trackedEntities = {}
-signals.viewDistance = 20
-
-
-local function getSignalType(signal)
-	local signalType = signals.signals[signals.signalObjects["signal" .. signal.entity].signalType]
-	return signalType.type
-end
-
--- 3 states: None, Changed, WasChanged
-
--- Function checks move_path of all the trains
--- If a signal is found it's current state is checked
--- after that the signal will be changed accordingly
-function signals.updateSignals()
-	local trainActivationRange = 500 -- To be changed
-
-	local trains = {}
-	local vehicles = game.interface.getEntities({pos = signals.pos, radius = trainActivationRange}, {type = "VEHICLE"})
-	-- zone.setZoneCircle("zoneRadius", signals.pos, 500)
-
-	for _, trackedTrain in pairs(signals.trackedEntities) do
-		local tracked = game.interface.getEntity(trackedTrain)
-		if tracked then
-			local trackedPos = tracked.position
-			if trackedPos then
-				local newTrains = game.interface.getEntities({pos = {trackedPos[1], trackedPos[2]}, radius = trainActivationRange}, {type = "VEHICLE"})
-				if newTrains and #newTrains > 0 then
-					for _, newTrain in pairs(newTrains) do
-						if not utils.contains(vehicles, newTrain) then
-							table.insert(vehicles, newTrain)
-						end
-					end
-				end
+---Set's gui's camera position. Updated by event.
+---We detect the game has left cockpitMode when the location starts updating again: the camera zooms to and tracks the train.
+---When entering cockpit mode when the camera is following a train there is a race condition so we only allow
+---detecting exiting cockpitMode after 2 seconds
+---@param pos table<number> x,y position
+---@param radius number
+function signals.updateGuiCameraPos(pos, radius)
+	if signals.cockpitMode then
+		if pos[1] == signals.pos[1] and pos[2] == signals.pos[2] then
+			-- No position change still in cockpitMode
+			return
+		elseif signals.cockpitModeAtTime ~= nil then
+			-- We wait 2 seconds before we start detecting exit cockpitMode
+			if os.clock() - signals.cockpitModeAtTime > 2  then
+				signals.cockpitModeAtTime = nil
 			end
 		else
-			if utils.contains(signals.trackedEntities, trackedTrain) then
-				utils.removeFromTableByValue(signals.trackedEntities, trackedTrain)
+			-- The location is updating so must hae exited cockpitMode
+			signals.cockpitMode = false
+			signals.cockpitTrainEntityId = nil
+		end
+	end
+
+	signals.pos = pos
+	signals.posRadius = radius
+end
+function signals.setCockpitMode(vehicleId)
+	if trainHelper.isTrain(vehicleId)  then
+		signals.cockpitMode = true
+		signals.cockpitTrainEntityId = vehicleId
+		signals.cockpitModeAtTime = os.clock()
+	end
+end
+function signals.getPosition()
+	if signals.cockpitMode and signals.cockpitTrainEntityId then
+		local trainPos = trainHelper.getTrainPos(signals.cockpitTrainEntityId)
+		if trainPos then
+			return trainPos
+		end
+	end
+	return signals.pos
+end
+----------------------
+
+--- Function checks move_path of all the trains
+--- If a signal is found it's current state is checked
+--- after that the signal will be changed accordingly
+function signals.updateSignals()
+	if signals.posRadius > config_cameraRadiusSignalVisibleAt and signals.cockpitMode == false then
+		return
+	end
+
+	utils.debugPrint("----------")
+	utils.debugPrint("Better Signals ", signals.viewDistance, signals.targetNoToEval)
+	utils.debugPrint("----------")
+	local start_time = os.clock()
+
+	local pos = signals.getPosition()
+	local trains = trainHelper.getTrainsToEvaluate(pos, signals.viewDistance)
+	signals.resetAll()
+
+	local trainLocsEdgeIds = trainHelper.computeTrainLocs(trains)
+
+	local signalsToBeUpdated = signals.computeSignalPaths(trains, trainLocsEdgeIds)
+
+	signals.updateConstructions(signalsToBeUpdated)
+
+	signals.throwSignalToRed()
+	utils.debugPrint(string.format("updateSignals. Elapsed time: %.4f", os.clock() - start_time))
+end
+
+function signals.computeSignalPaths(trains, trainLocsEdgeIds)
+	local signalsToBeUpdated = {}
+
+	-- Compute signals in path of each train
+	for vehicleId, vehComp in pairs(trains) do
+		utils.debugPrintVehicle(vehicleId)
+
+		local lineName = trainHelper.getLineNameOfVehicle(vehComp)
+		local signalsToEvaluate = signals.targetNoToEval
+
+		local signalPaths = pathEvaluator.evaluate(vehicleId, config_lookAheadEdges, signalsToEvaluate, trainLocsEdgeIds, signals.signalObjects, signals.signals)
+
+		for _, signalPath in ipairs(signalPaths) do
+			signalPath.lineName = lineName.name
+			signals.recordSignalToBeUpdated(signalPath, signalsToBeUpdated)
+		end
+	end
+	return signalsToBeUpdated
+end
+
+function signals.recordSignalToBeUpdated(signalPath, signalsToBeUpdated)
+	local signalKey = "signal" .. signalPath.entity
+	if signalsToBeUpdated[signalKey] then
+		-- two trains want to update the same signal. Prioritise whichever train is closest to signal
+
+		local existingPath = signalsToBeUpdated[signalKey]
+		if existingPath.placeInPath > signalPath.placeInPath then
+			utils.debugPrint("existing replace", signalPath.entity)
+			signalsToBeUpdated[signalKey] = signalPath
+		elseif existingPath.placeInPath == signalPath.placeInPath then
+			-- when both have same place use whichever has green
+			utils.debugPrint("2 trains with same place in", signalPath.entity)
+			if existingPath.signal_state < signalPath.signal_state then
+				utils.debugPrint("existing replace", signalPath.entity)
+				signalsToBeUpdated[signalKey] = signalPath
 			end
+		else
+			utils.debugPrint("existing remains")
 		end
+	else
+		signalsToBeUpdated[signalKey] = signalPath
 	end
+end
 
-	for _, vehicle in pairs(vehicles) do
-		local train = utils.getComponentProtected(vehicle, 70)
-		if (train ~= nil) and (not train.userStopped) and (not train.noPath) and (not train.doorsOpen) then
-			table.insert(trains, vehicle)
-		end
-	end
-	
-	for _, value in pairs(signals.signalObjects) do
-		if value.changed then
-			value.changed = value.changed * 2
-		end
-	end
-	
-	for _, train in pairs(trains) do
-		local move_path = utils.getComponentProtected(train, 66)
+function signals.updateConstructions(signalsToBeUpdated)
+	for signalKey, signalPath in pairs(signalsToBeUpdated) do
+		local tableEntry = signals.signalObjects[signalKey]
+		if tableEntry then
+			local newCheckSum = 0
+			for _, betterSignal in pairs(tableEntry.signals) do
+				signals.signalObjects[signalKey].changed = BETTER_SIGNAL_CHANGED
+				local conSignal = betterSignal.construction
 
-		if move_path then
-			local signalPaths = evaluatePath(move_path)
-			
-			for _, signalPath in ipairs(signalPaths) do
-				if signalPath.entity then
-					local minSpeed = signalPath.signal_speed
-					local signalState = signalPath.signal_state
-					local signalString = "signal" .. signalPath.entity
-					local tableEntry = signals.signalObjects[signalString]
+				if conSignal then
+					local oldConstruction = game.interface.getEntity(conSignal)
+					if oldConstruction and oldConstruction.params then
+						oldConstruction.params.previous_speed = signalPath.previous_speed
+						oldConstruction.params.signal_state = signalPath.signal_state
+						oldConstruction.params.signal_speed = signalPath.signal_speed
+						oldConstruction.params.following_signal = signalPath.following_signal
+						oldConstruction.params.paramsOverride = signalPath.paramsOverride
+						oldConstruction.params.showSpeedChange = true
 
-					if tableEntry then
-						local newCheckSum = 0
-
-						for _, betterSignal in pairs(tableEntry.signals) do
-
-							signals.signalObjects[signalString].changed = 1
-
-							local conSignal = betterSignal.construction
-							local transportVehicle = utils.getComponentProtected(train, 70)
-
-							if transportVehicle and transportVehicle.line then
-								local lineName = utils.getComponentProtected(transportVehicle.line, 63)
-
-								if lineName then
-									signalPath.line = lineName.name
-								end
-							end
-
-							if conSignal then
-								local oldConstruction = game.interface.getEntity(conSignal)
-								if oldConstruction and oldConstruction.params then
-
-									oldConstruction.params.previous_speed = signalPath.previous_speed
-									oldConstruction.params.signal_state = signalState
-									oldConstruction.params.signal_speed = math.floor(minSpeed)
-									oldConstruction.params.following_signal = signalPath.following_signal
-									oldConstruction.params.paramsOverride = signalPath.paramsOverride
-									oldConstruction.params.showSpeedChange = signalPath.showSpeedChange
-									oldConstruction.params.currentLine = signalPath.line
-
-									newCheckSum = signalPath.checksum
-
-									if (not signals.signalObjects[signalString].checksum) or (newCheckSum ~= signals.signalObjects[signalString].checksum) then
-										utils.updateConstruction(oldConstruction, conSignal)
-									end
-								else
-									print("Couldn't access params")
-								end
-							end
+						if signalPath.lineName ~= "ERROR" then
+							oldConstruction.params.currentLine = signalPath.lineName
 						end
 
-						signals.signalObjects[signalString].checksum = newCheckSum
+						newCheckSum = signalPath.checksum
+
+						if (not signals.signalObjects[signalKey].checksum) or (newCheckSum ~= signals.signalObjects[signalKey].checksum) then
+							utils.updateConstruction(oldConstruction, conSignal)
+							
+							utils.debugPrint("utils.updateConstruction for ", signalPath.entity, newCheckSum, signals.signalObjects[signalKey].checksum, signalPath.signal_state )
+						end
+					else
+						print("Couldn't access params")
 					end
 				end
 			end
+
+			signals.signalObjects[signalKey].checksum = newCheckSum
 		end
 	end
-	
-	-- Throw signal to red
-	for _, value in pairs(signals.signalObjects) do
-		if value.changed == 2 then
+end
+
+function signals.resetAll()
+    for _, value in pairs(signals.signalObjects) do
+        if value.changed then
+            value.changed = value.changed * 2
+        end
+    end
+end
+
+function signals.throwSignalToRed()
+	for signalkey, value in pairs(signals.signalObjects) do
+		if value.changed == BETTER_SIGNAL_WAS_CHANGED then
 			for _, signal in pairs(value.signals) do
 				local oldConstruction = game.interface.getEntity(signal.construction)
 				if oldConstruction then
+					utils.debugPrint("Throw to red ", signalkey, value.checksum)
+
 					oldConstruction.params.signal_state = 0
 					oldConstruction.params.previous_speed = nil
-
 					utils.updateConstruction(oldConstruction, signal.construction)
 				end
-				value.changed = 0
+				value.changed = BETTER_SIGNAL_NO_CHANGE
+				value.checksum = 0
 			end
 		end
 	end
 end
-
 
 -- Registers new signal
 -- @param signal signal entityid
 -- @param construct construction entityid
 function signals.createSignal(signal, construct, signalType, isAnimated)
 	local signalKey = "signal" .. signal
-	print("Register Signal: " .. signal .. " (" .. signalKey ..") With construction: " .. construct)
 
 	if not signals.signalObjects[signalKey] then
 		signals.signalObjects[signalKey] = {}
 		signals.signalObjects[signalKey].signals = {}
 	end
 
-	signals.signalObjects[signalKey].changed = 0
+	signals.signalObjects[signalKey].changed = BETTER_SIGNAL_NO_CHANGE
 	signals.signalObjects[signalKey].signalType = signalType
 	signals.signalObjects[signalKey].construction = construct
 
@@ -163,7 +232,7 @@ function signals.createSignal(signal, construct, signalType, isAnimated)
 
 	newSignal.construction = construct
 	newSignal.isAnimated = isAnimated
-	
+
 	table.insert(signals.signalObjects[signalKey].signals, newSignal)
 end
 
@@ -172,14 +241,14 @@ function signals.removeSignalBySignal(signal)
 end
 
 function signals.removeSignalByConstruction(construction)
-	for key, value in pairs(signals.signalObjects) do
+	for _, value in pairs(signals.signalObjects) do
 		for index, signal in ipairs(value.signals) do
 			if signal.construction == construction then
 				table.remove(value.signals, index)
 				print("Removed Signal " .. construction .. " at index: " .. index)
 				return
 			end
-		end	
+		end
 	end
 end
 
@@ -191,151 +260,6 @@ function signals.removeTunnel(signalConstructionId)
 		utils.updateConstruction(oldConstruction, signalConstructionId)
 	end
 end
-
-function parseName(input)
-    local result = {}
-    -- Entferne Leerzeichen am Anfang und Ende des Strings
-    input = input:match("^%s*(.-)%s*$")
-    
-    -- Iteriere über jedes Paar, das durch Kommas getrennt ist
-    for pair in string.gmatch(input, '([^,]+)') do
-        local key, value = pair:match("^%s*([^=]+)%s*=%s*(.+)%s*$")
-        if key and value then
-            -- Konvertiere "true" und "false" in booleans
-            if value == "true" then
-                value = 1
-            elseif value == "false" then
-                value = 2
-            elseif tonumber(value) then
-                value = tonumber(value)
-            end
-            result[key] = value
-        end
-    end
-    return result
-end
-
-local function isSignal (signal, potentialSignal)
-	if signals.signalObjects["signal" .. potentialSignal.entity] then
-		local signalType = signals.signals[signals.signalObjects["signal" .. potentialSignal.entity].signalType]
-		local construction = utils.getComponentProtected(signals.signalObjects["signal" .. potentialSignal.entity].construction, 13)
-		local isHybrid = false
-
-		if signalType.type == "hybrid" and construction then
-			isHybrid = construction.params[signalType['preSignalTriggerKey']] == signalType['preSignalTriggerValue']
-
-			if isHybrid then
-				return false
-			end
-		end
-	end
-
-	return (signal.type == 0 or signal.type == 1) or ((potentialSignal.entity and signals.signalObjects["signal" .. potentialSignal.entity]))
-end
-
-
-function evaluatePath(path)
-	local pathViewDistance = signals.viewDistance-- To be changed
-
-	local evaluatedPath = {}
-	local currentSegment = {}
-	local edgeSpeeds = {}
-	local checksum = 0
-	local followingSignal = {}
-	local preSignalTable = {}
-
-	if path.path then
-		local pathStart = math.max((path.dyn.pathPos.edgeIndex - 6), 1)
-		local pathEnd = math.min(#path.path.edges, pathStart + pathViewDistance)
-
-		for pathIndex = pathEnd, pathStart, -1 do
-			local currentEdge = path.path.edges[pathIndex]
-
-			if currentEdge then
-				table.insert(edgeSpeeds, utils.getEdgeSpeed(currentEdge.edgeId))
-
-				local potentialSignal = api.engine.system.signalSystem.getSignal(currentEdge.edgeId, currentEdge.dir)
-				local signalComponent = utils.getComponentProtected(potentialSignal.entity, 26)
-
-				if signalComponent and signalComponent.signals and #signalComponent.signals > 0 then
-
-					local signal = signalComponent.signals[1]
-
-					if (isSignal(signal, potentialSignal)) then
-
-						currentSegment.entity = potentialSignal.entity
-						currentSegment.signal_state = signal.state
-						currentSegment.incomplete = false
-
-						currentSegment.signal_speed = utils.getMinValue(edgeSpeeds)
-
-						if currentSegment.paramsOverride and currentSegment.paramsOverride.speed then
-							currentSegment.signal_speed = currentSegment.paramsOverride.speed
-						end
-
-						if followingSignal then
-							if #evaluatedPath > 1 then
-								followingSignal.previous_speed = currentSegment.signal_speed
-								preSignalTable.previous_speed = currentSegment.signal_speed
-							end
-
-							currentSegment.following_signal = followingSignal
-						end
-
-						if currentSegment.paramsOverride and currentSegment.paramsOverride.showSpeedChange then
-							currentSegment.showSpeedChange = currentSegment.paramsOverride.showSpeedChange == 1
-						else
-							currentSegment.showSpeedChange = true
-						end
-
-						currentSegment.checksum = checksum + utils.checksum(currentSegment.entity, currentSegment.signal_state, currentSegment.signal_speed, #evaluatedPath)
-						checksum = currentSegment.checksum
-
-						table.insert(evaluatedPath, 1, currentSegment)
-
-						followingSignal = currentSegment
-						currentSegment = {}
-						edgeSpeeds = {}
-					elseif (signal.type == 0 or signal.type == 1) or (potentialSignal.entity and signals.signalObjects["signal" .. potentialSignal.entity]) then -- preSignal
-						preSignalTable = utils.deepCopy(followingSignal)
-						preSignalTable.entity = potentialSignal.entity
-
-						preSignalTable.checksum = checksum + utils.checksum(preSignalTable.entity, preSignalTable.signal_state, preSignalTable.signal_speed, #evaluatedPath)
-						checksum = preSignalTable.checksum
-
-						table.insert(evaluatedPath, 1, preSignalTable)
-					elseif signal.type == 2 then
-						local name = utils.getComponentProtected(potentialSignal.entity, 63)
-						local values = parseName(string.gsub(name.name, " ", ""))
-
-						currentSegment.paramsOverride = values
-					end
-				elseif pathIndex == (#path.path.edges - path.path.endOffset) then -- Adding Trainstations
-					currentSegment.entity = 0000
-					currentSegment.signal_state = 0
-					currentSegment.incomplete = false
-					currentSegment.signal_speed = 0
-
-					currentSegment.checksum = checksum + utils.checksum(currentSegment.entity, currentSegment.signal_state, currentSegment.signal_speed, #evaluatedPath)
-					checksum = currentSegment.checksum
-
-					table.insert(evaluatedPath, 1, currentSegment)
-
-					followingSignal = currentSegment
-					currentSegment = {}
-					edgeSpeeds = {}
-				end
-			end
-		end
-
-		if followingSignal then
-			followingSignal.previous_speed = utils.getMinValue(edgeSpeeds)
-		end
-	end
-
-	return evaluatedPath
-end
-
 
 function signals.save()
 	return signals.signalObjects
@@ -349,4 +273,3 @@ function signals.load(state)
 end
 
 return signals
-
