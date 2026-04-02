@@ -161,7 +161,6 @@ function pathEvaluator.findSignalsInPath(path, lookAheadEdges, signalsToEvaluate
 	---@field minSpeed number
 	---@field presignalsEntityIds [string]
 	---@field paramsOverride table
-	---@field isBehindTrain boolean -- Indicates if the block is behind the train
 
 	local blocks = {}
 	local presignalsForNextBlock = {}
@@ -202,7 +201,6 @@ function pathEvaluator.findSignalsInPath(path, lookAheadEdges, signalsToEvaluate
 					edgeEntityIdOn = edgeEntityId,
 					minSpeed = 0,
 					presignalsEntityIds = presignalsForNextBlock,
-					isBehindTrain = false,
 				}
 				table.insert(blocks, stopInfo)
 			elseif potentialSignal and potentialSignal.entity and potentialSignal.entity ~= -1 then
@@ -219,8 +217,7 @@ function pathEvaluator.findSignalsInPath(path, lookAheadEdges, signalsToEvaluate
 							isStation = false,
 							edgeEntityIdOn = edgeEntityId,
 							minSpeed = speed,
-							presignalsEntityIds = presignalsForNextBlock,
-							isBehindTrain = false
+							presignalsEntityIds = presignalsForNextBlock
 						}
 						table.insert(blocks, signalInfo)
 						presignalsForNextBlock = {}
@@ -302,7 +299,6 @@ function pathEvaluator.findSignalsInPathBackwards(path, lookAheadEdges, signalsT
 					edgeEntityIdOn = edgeEntityId,
 					minSpeed = blockMinSpeed,
 					presignalsEntityIds = presignalsForNextBlock, -- Actually for the next block...
-					isBehindTrain = true, -- This block is behind the train
 					paramsOverride = paramsOverride
 				}
 			elseif potentialSignal and potentialSignal.entity and potentialSignal.entity ~= -1 then
@@ -320,7 +316,6 @@ function pathEvaluator.findSignalsInPathBackwards(path, lookAheadEdges, signalsT
 							edgeEntityIdOn = edgeEntityId,
 							minSpeed = blockMinSpeed,
 							presignalsEntityIds = presignalsForNextBlock, -- Actually for the next block...
-							isBehindTrain = true, -- This block is behind the train
 							paramsOverride = paramsOverride
 						}
 					elseif pathEvaluator.isASignal(signal, potentialSignal.entity, main_signalObjects) then
