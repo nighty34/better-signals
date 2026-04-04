@@ -127,15 +127,20 @@ function signals.recordSignalToBeUpdated(signalPath, signalsToBeUpdated)
 		-- two trains want to update the same signal. Prioritise whichever train is closest to signal
 
 		local existingPath = signalsToBeUpdated[signalKey]
-		if existingPath.placeInPath > signalPath.placeInPath then
+		if existingPath.place_in_path > signalPath.place_in_path then
 			utils.debugPrint("existing replace", signalPath.entity)
 			signalsToBeUpdated[signalKey] = signalPath
-		elseif existingPath.placeInPath == signalPath.placeInPath then
-			-- when both have same place use whichever has green
-			utils.debugPrint("2 trains with same place in", signalPath.entity)
+		elseif existingPath.place_in_path == signalPath.place_in_path then
+			-- when both have same place use whichever has green, or which is closer to the signal
+			utils.debugPrint("2 trains with same place in ", signalPath.entity)
 			if existingPath.signal_state < signalPath.signal_state then
 				utils.debugPrint("existing replace", signalPath.entity)
 				signalsToBeUpdated[signalKey] = signalPath
+			elseif existingPath.signal_state == signalPath.signal_state then
+				if existingPath.dist_from_signal > signalPath.dist_from_signal then
+					utils.debugPrint("existing replace", signalPath.entity)
+					signalsToBeUpdated[signalKey] = signalPath
+				end
 			end
 		else
 			utils.debugPrint("existing remains")
