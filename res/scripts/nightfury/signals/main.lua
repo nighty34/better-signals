@@ -24,6 +24,7 @@ signals.cockpitMode = false
 signals.cockpitTrainEntityId = nil
 signals.cockpitModeAtTime = nil -- We lock the cockpit mode for 2 seconds to prevent a race condition 
 -- where a late arriving camera move makes us think we're out of cockpitMode
+signals.deleteSignalsOnBulldoze = true
 
 ----------------------
 --GUI Location Update!
@@ -243,7 +244,19 @@ function signals.createSignal(signal, construct, signalType, isAnimated)
 end
 
 function signals.removeSignalBySignal(signal)
+	local signalObj = signals.signalObjects["signal" .. signal]
 	signals.signalObjects["signal" .. signal] = nil
+
+	if signals.deleteSignalsOnBulldoze then
+		local constructionsToRemove = {}
+		if signalObj and signalObj.signals then
+			for _, signalVal in pairs(signalObj.signals) do
+				table.insert(constructionsToRemove, signalVal.construction)
+			end
+
+			utils.bulldozerConstructions(constructionsToRemove)
+		end
+	end
 end
 
 function signals.removeSignalByConstruction(construction)

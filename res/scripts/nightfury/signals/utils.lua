@@ -33,6 +33,30 @@ function utils.getComponentProtected(entityId, componentId)
 	end
 end
 
+---Bulldozers list of constructions
+---@param consEntityIds table vector of entity ids to remove
+function utils.bulldozerConstructions(consEntityIds)
+	local toRemove = {}
+	for _, consEntity in pairs(consEntityIds) do
+		if api.engine.entityExists(consEntity) then
+			table.insert(toRemove, consEntity)
+		end
+	end
+
+	if #toRemove == 0 then
+		return
+	end
+
+	local proposal = api.type.SimpleProposal.new()
+	proposal.constructionsToRemove = toRemove
+
+	api.cmd.sendCommand(api.cmd.make.buildProposal(proposal, nil, false), function(res, success)
+		if not success then
+			print(res.resultProposalData.errorState.messages[1] .. " - " .. toRemove[1])
+		end
+	end)
+end
+
 -- Update existing construction
 -- @param params parameter by which the new construction should be build
 -- @param reference is a reference to the old entity. This is used to check if the new entity still holds the same id as before

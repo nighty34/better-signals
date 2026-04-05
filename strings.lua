@@ -21,6 +21,9 @@ return {
 		
 		["better_signals_tunnel_helper"] = ("Tunnel Hilfe"),
 		["better_signals_tunnel_helper_tooltip"] = ("Eine Hilfe, welche das Platzieren von Signalen in Tunnels vereinfachen soll."),
+
+		["better_signals_qol_delete_signals"] = ("Experimentell: Entferne Signale beim Gleis-/Signalabriss"),
+		["better_signals_qol_delete_signals_tooltip"] = ("Experimentell: Entferne das Better-Signal-Asset, wenn das Gleis oder Signal, an dem es befestigt ist, abgerissen wird."),
 	},
 	en = {
 		["nighty_no"] = ("Off"),
@@ -42,6 +45,9 @@ return {
 		
 		["better_signals_tunnel_helper"] = ("Tunnel Helper"),
 		["better_signals_tunnel_helper_tooltip"] = ("Check to enable a helper for placing signals in tunnels"),
+
+		["better_signals_qol_delete_signals"] = ("Experimental: Remove on track/signal bulldozer"),
+		["better_signals_qol_delete_signals_tooltip"] = ("Experimental: Remove the better signal asset when the track or signal it is attached to is bulldozed."),
 	}
 }
 end

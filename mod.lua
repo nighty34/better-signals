@@ -36,6 +36,14 @@ function data()
 					tooltip = _("better_signals_target_no_signals_tooltip"),
 					defaultIndex = 2,
 				},
+				{
+					key = "better_signals_qol_delete_signals",
+					name = _("better_signals_qol_delete_signals"),
+					uiType = "CHECKBOX",
+					values = {  _("0"),_("1"),},
+					tooltip = _("better_signals_qol_delete_signals_tooltip"),
+					defaultIndex = 1,
+				},
 			},
 		},
 		runFn = function(settings, modParams)
@@ -54,6 +62,10 @@ function data()
 				-- Only do up to 9 otherwise may have checksum collisions (2nd to last digit in checksum is signal count. So allowed range 1-9 for that)
 				if params["better_signals_target_no_signals"] ~= nil then
 					signals.targetNoToEval = (params["better_signals_target_no_signals"]+3)
+				end
+
+				if params["better_signals_qol_delete_signals"] ~= nil then
+					signals.deleteSignalsOnBulldoze = (params["better_signals_qol_delete_signals"] == 1)
 				end
 			end
 
