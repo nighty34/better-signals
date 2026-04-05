@@ -42,7 +42,7 @@ function pathEvaluator.evaluate(vehicleId,  lookAheadEdges, signalsToEvaluate, t
 
 	---1st evaluation: We split path into blocks protected by signals/end station. Each block starts with a signal
 	local blocksInPath = pathEvaluator.findBlocksInPath(path,lookAheadEdges, signalsToEvaluate, main_signalObjects, main_signals)
-	local blockBehind = pathEvaluator.findBlockBackwards(path,lookAheadEdges, signalsToEvaluate, main_signalObjects, main_signals)
+	local blockBehind = pathEvaluator.findBlockBackwards(path,lookAheadEdges, main_signalObjects, main_signals)
 	local lastSignalState = SIGNAL_STATE_RED
 
 	-- 2nd evaluation: We determine signal states for each main signal and prepare to return as SignalPath
@@ -70,7 +70,6 @@ function pathEvaluator.evaluate(vehicleId,  lookAheadEdges, signalsToEvaluate, t
 		end
 		signalPaths[1].previous_speed = blockBehind.minSpeed
 	end
-
 
 	-- 3rd evaluation create presignals between the main signals. We do this after the 2nd evaluation because 2nd sets following_signal, and previous_speed which we need
 	-- A presignal is just a copy of the main signal it's for
@@ -279,23 +278,20 @@ end
 ---Evaluate the state of a signal. Behind the train
 ---@param path any
 ---@param lookAheadEdges any
----@param signalsToEvaluate any
 ---@param main_signalObjects any -- signals.signalObjects
 ---@param main_signals any -- signals.signals
 ---@return BlockInfo | nil
-function pathEvaluator.findBlockBackwards(path, lookAheadEdges, signalsToEvaluate, main_signalObjects, main_signals)
+function pathEvaluator.findBlockBackwards(path, lookAheadEdges, main_signalObjects, main_signals)
 
 	if path and path.path and #path.path.edges > 2 then
-		-- Going backwards from end to start
-
-		local startPoint = math.max(path.dyn.pathPos.edgeIndex -1, 1)
-		local stopPoint = math.max(1, startPoint - lookAheadEdges /4)
-		local pathIndex = startPoint
+		local startPoint = math.max(path.dyn.pathPos.edgeIndex -1, 1) -- Train location
+		local stopPoint = math.max(1, startPoint - lookAheadEdges /4) -- Start of path.path.edges. Normally a station
 		local blockMinSpeed = 600
-		local presignalsForNextBlock = {}
+		local presignalsForFirstBlock = {}
 		local paramsOverride = nil
 		local speedOverriden = false
-		while true do
+
+		for pathIndex = startPoint, stopPoint, -1 do
 			local currentEdge = path.path.edges[pathIndex]
 			local edgeEntityId = currentEdge.edgeId.entity
 
@@ -309,22 +305,9 @@ function pathEvaluator.findBlockBackwards(path, lookAheadEdges, signalsToEvaluat
 				local speed = math.floor(utils.getEdgeSpeed(currentEdge.edgeId, transportNetwork))
 				blockMinSpeed = math.min(blockMinSpeed, speed)
 			end
-			local potentialSignal = api.engine.system.signalSystem.getSignal(currentEdge.edgeId, currentEdge.dir)
 
-			if pathIndex == stopPoint then
-				-- Adding Trainstations/End of path
-				return {
-					edges = {},
-					signalListEntityId = 0000,
-					hasSwitch = false,
-					isStation = true,
-					edgeEntityIdOn = edgeEntityId,
-					minSpeed = blockMinSpeed,
-					presignalsEntityIds = presignalsForNextBlock, -- Actually for the next block...
-					paramsOverride = paramsOverride,
-					edgeDistCount = 0
-				}
-			elseif potentialSignal and potentialSignal.entity and potentialSignal.entity ~= -1 then
+			local potentialSignal = api.engine.system.signalSystem.getSignal(currentEdge.edgeId, currentEdge.dir)
+			if potentialSignal and potentialSignal.entity and potentialSignal.entity ~= -1 then
 				local signalComponent = api.engine.getComponent(potentialSignal.entity, api.type.ComponentType.SIGNAL_LIST)
 				if signalComponent and signalComponent.signals and #signalComponent.signals > 0 then
 					local signal = signalComponent.signals[1]
@@ -338,18 +321,19 @@ function pathEvaluator.findBlockBackwards(path, lookAheadEdges, signalsToEvaluat
 							isStation = false,
 							edgeEntityIdOn = edgeEntityId,
 							minSpeed = blockMinSpeed,
-							presignalsEntityIds = presignalsForNextBlock, -- Actually for the next block...
+							presignalsEntityIds = presignalsForFirstBlock,
 							paramsOverride = paramsOverride,
 							edgeDistCount = 0
 						}
 					elseif pathEvaluator.isASignal(signal, potentialSignal.entity, main_signalObjects) then
 						-- Presignal/Hybrid in presignal state
-						table.insert(presignalsForNextBlock, potentialSignal.entity)
+						table.insert(presignalsForFirstBlock, potentialSignal.entity)
 					elseif signal.type == SIGNAL_WAYPOINT then
 						-- Params override
 						local name = utils.getComponentProtected(potentialSignal.entity, 63)
 						local values = pathEvaluator.parseName(string.gsub(name.name, " ", ""))
 
+						paramsOverride = values
 						if values.speed then
 							speedOverriden = true
 							blockMinSpeed = values.speed
@@ -357,9 +341,20 @@ function pathEvaluator.findBlockBackwards(path, lookAheadEdges, signalsToEvaluat
 					end
 				end
 			end
-
-			pathIndex = pathIndex - 1
 		end
+
+		-- Adding Trainstations/End of path
+		return {
+			edges = {},
+			signalListEntityId = 0000,
+			hasSwitch = false,
+			isStation = true,
+			edgeEntityIdOn = path.path.edges[stopPoint].edgeId.entity,
+			minSpeed = blockMinSpeed,
+			presignalsEntityIds = presignalsForFirstBlock,
+			paramsOverride = paramsOverride,
+			edgeDistCount = 0
+		}
 	end
 
 	return nil
