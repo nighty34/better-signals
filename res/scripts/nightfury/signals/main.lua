@@ -209,6 +209,7 @@ function signals.throwSignalToRed()
 
 					oldConstruction.params.signal_state = 0
 					oldConstruction.params.previous_speed = nil
+					oldConstruction.params.following_signal = nil
 					utils.updateConstruction(oldConstruction, signal.construction)
 				end
 				value.changed = BETTER_SIGNAL_NO_CHANGE
