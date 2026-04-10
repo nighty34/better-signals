@@ -202,13 +202,48 @@ function utils.debugPrint(...)
 	end
 end
 
-
 function utils.debugPrintVehicle(vehicleId)
 	if config_debug then
 		print("----------")
 		local vehNameEnt = api.engine.getComponent(vehicleId, api.type.ComponentType.NAME)
 		print("Vehicle " .. vehicleId .. " Name: " .. vehNameEnt.name)
 	end
+end
+
+local betterSignalsApiProperties = {
+	previous_speed = true,
+	signal_state = true,
+	signal_speed = true,
+	following_signal = true,
+	paramsOverride = true,
+	showSpeedChange = true,
+}
+
+function utils.getStaticConstructionParams(constructionId)
+	local conEntity = game.interface.getEntity(constructionId)
+
+	local paramsTable = {}
+	if conEntity and conEntity.params then
+		for key, value in pairs(conEntity.params) do
+			if not betterSignalsApiProperties[key] then
+				paramsTable[key] = value
+			end
+		end
+	end
+	return paramsTable
+end
+
+function utils.updateBetterSignalsParamsOnConstruction(constructionId, signalPath)
+	local oldConstruction = game.interface.getEntity(constructionId)
+	if oldConstruction and oldConstruction.params then
+		for key, _ in pairs(betterSignalsApiProperties) do
+			oldConstruction.params[key] = signalPath[key]
+		end
+	else
+		return nil
+	end
+
+	return oldConstruction
 end
 
 return utils

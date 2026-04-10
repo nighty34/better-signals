@@ -14,17 +14,17 @@ local BETTER_SIGNAL_WAS_CHANGED = 2
 
 local signals = {}
 signals.signals = {}
--- Table holds all placed Signals
-signals.signalObjects = {}
+signals.signalObjects = {} -- Table holds all placed Signals
 signals.viewDistance = 2000
 signals.targetNoToEval = 4
+signals.deleteSignalsOnBulldoze = true
+
 signals.pos = {0,0} -- Updated by event
 signals.posRadius = 1000 -- Updated by event
 signals.cockpitMode = false
 signals.cockpitTrainEntityId = nil
 signals.cockpitModeAtTime = nil -- We lock the cockpit mode for 2 seconds to prevent a race condition 
 -- where a late arriving camera move makes us think we're out of cockpitMode
-signals.deleteSignalsOnBulldoze = true
 
 ----------------------
 --GUI Location Update!
@@ -106,16 +106,13 @@ function signals.computeSignalPaths(trains, trainLocsEdgeIds)
 	local signalsToBeUpdated = {}
 
 	-- Compute signals in path of each train
-	for vehicleId, vehComp in pairs(trains) do
+	for vehicleId, _ in pairs(trains) do
 		utils.debugPrintVehicle(vehicleId)
-
-		local lineName = trainHelper.getLineNameOfVehicle(vehComp)
 		local signalsToEvaluate = signals.targetNoToEval
 
 		local signalPaths = pathEvaluator.evaluate(vehicleId, config_lookAheadEdges, signalsToEvaluate, trainLocsEdgeIds, signals.signalObjects, signals.signals)
 
 		for _, signalPath in ipairs(signalPaths) do
-			signalPath.lineName = lineName.name
 			signals.recordSignalToBeUpdated(signalPath, signalsToBeUpdated)
 		end
 	end
@@ -158,28 +155,15 @@ function signals.updateConstructions(signalsToBeUpdated)
 			local newCheckSum = 0
 			for _, betterSignal in pairs(tableEntry.signals) do
 				signals.signalObjects[signalKey].changed = BETTER_SIGNAL_CHANGED
-				local conSignal = betterSignal.construction
-
-				if conSignal then
-					local oldConstruction = game.interface.getEntity(conSignal)
-					if oldConstruction and oldConstruction.params then
-						oldConstruction.params.previous_speed = signalPath.previous_speed
-						oldConstruction.params.signal_state = signalPath.signal_state
-						oldConstruction.params.signal_speed = signalPath.signal_speed
-						oldConstruction.params.following_signal = signalPath.following_signal
-						oldConstruction.params.paramsOverride = signalPath.paramsOverride
-						oldConstruction.params.showSpeedChange = true
-
-						if signalPath.lineName ~= "ERROR" then
-							oldConstruction.params.currentLine = signalPath.lineName
-						end
-
+				local conEntityId = betterSignal.construction
+				if conEntityId then
+					local proposedConstruction = utils.updateBetterSignalsParamsOnConstruction(conEntityId, signalPath)
+					if proposedConstruction then
 						newCheckSum = signalPath.checksum
 
 						if (not signals.signalObjects[signalKey].checksum) or (newCheckSum ~= signals.signalObjects[signalKey].checksum) then
-							utils.updateConstruction(oldConstruction, conSignal)
-							
-							utils.debugPrint("utils.updateConstruction for ", signalPath.entity, newCheckSum, signals.signalObjects[signalKey].checksum, signalPath.signal_state )
+							utils.updateConstruction(proposedConstruction, conEntityId)
+							utils.debugPrint("utils.updateConstruction for ", signalPath.entity,conEntityId, newCheckSum, signals.signalObjects[signalKey].checksum, signalPath.signal_state )
 						end
 					else
 						print("Couldn't access params")

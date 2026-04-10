@@ -30,6 +30,8 @@ function pathEvaluator.evaluate(vehicleId,  lookAheadEdges, signalsToEvaluate, t
 	---@field paramsOverride table
 	---@field place_in_path number -- Which number it is from the train's position
 	---@field dist_from_signal number -- Distance from the signal in number of edges
+	---@field showSpeedChange boolean -- Whether to show the speed change on the signal construction
+	---@field is_station boolean -- Whether this signal path is actually a station
 
 	local res = {}
 	local signalPaths = {}
@@ -49,7 +51,7 @@ function pathEvaluator.evaluate(vehicleId,  lookAheadEdges, signalsToEvaluate, t
 	-- Order is important as we add information from previous and following signals to the current signal
 	for i = 1, #blocksInPath, 1 do
 		local nextSignalIsRedWaypoint = pathEvaluator.nextSignalIsRedWaypoint(blocksInPath, i)
-		local signalPath = pathEvaluator.createSignalPath(blocksInPath, i, trainLocsEdgeEntityIds, signalPaths, nextSignalIsRedWaypoint);
+		local signalPath = pathEvaluator.createSignalPath(blocksInPath, i, trainLocsEdgeEntityIds, signalPaths, nextSignalIsRedWaypoint, main_signalObjects)
 		table.insert(signalPaths, signalPath)
 
 		if signalPath.signal_state == SIGNAL_STATE_RED and (blocksInPath[i].hasSwitch or lastSignalState == SIGNAL_STATE_GREEN or nextSignalIsRedWaypoint) then
@@ -121,9 +123,13 @@ function pathEvaluator.createSignalPathForBlockBehindTrain(signalBehind, firstSi
 		signalPath.signal_state = signalState
 		signalPath.signal_speed = signalBehind.minSpeed
 		signalPath.paramsOverride = signalBehind.paramsOverride
+		signalPath.showSpeedChange = true
+		signalPath.following_signal = firstSignalInPath
+		-- is_station and construction_params are not necessary for the first (only apply to following_signal)
+
+		-- Internal
 		signalPath.place_in_path = 0
 		signalPath.dist_from_signal = 0
-		signalPath.following_signal = firstSignalInPath
 		return signalPath
 end
 
@@ -133,8 +139,9 @@ end
 ---@param trainLocsEdgeEntityIds any
 ---@param signalPaths [SignalPath] -- signal paths created so far, used to get info about previous signal
 ---@param nextSignalIsRedWaypoint boolean
+---@param main_signalObjects table
 ---@return SignalPath
-function pathEvaluator.createSignalPath(blocksInPath, idx, trainLocsEdgeEntityIds, signalPaths, nextSignalIsRedWaypoint)
+function pathEvaluator.createSignalPath(blocksInPath, idx, trainLocsEdgeEntityIds, signalPaths, nextSignalIsRedWaypoint, main_signalObjects)
 		local signalAndBlock = blocksInPath[idx]
 
 		local signalState = SIGNAL_STATE_RED
@@ -151,15 +158,31 @@ function pathEvaluator.createSignalPath(blocksInPath, idx, trainLocsEdgeEntityId
 		signalPath.signal_state = signalState
 		signalPath.signal_speed = signalAndBlock.minSpeed
 		signalPath.paramsOverride = signalAndBlock.paramsOverride
-		signalPath.place_in_path = idx
-		signalPath.dist_from_signal = signalAndBlock.edgeDistCount
+		signalPath.is_station = signalAndBlock.isStation
+		signalPath.showSpeedChange = true
+		signalPath.construction_params = pathEvaluator.getFirstConstructionParams(signalAndBlock.signalListEntityId, main_signalObjects)
 
 		if #signalPaths > 0 then
 			local lastSignal = signalPaths[#signalPaths]
 			signalPath.previous_speed = lastSignal.signal_speed
 			lastSignal.following_signal = signalPath
 		end
+
+		-- Internal
+		signalPath.place_in_path = idx
+		signalPath.dist_from_signal = signalAndBlock.edgeDistCount
+
 		return signalPath
+end
+
+function pathEvaluator.getFirstConstructionParams(signalListEntityId, main_signalObjects)
+	local constructionTable = main_signalObjects["signal" .. signalListEntityId]
+	if constructionTable and constructionTable.signals and #constructionTable.signals > 0 then
+		local conSignalId = constructionTable.signals[1].construction
+		return utils.getStaticConstructionParams(conSignalId)
+	end
+
+	return {}
 end
 
 ---First evaluation: We convert path into blocks protected by signals/end station
