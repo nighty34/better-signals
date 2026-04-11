@@ -130,6 +130,7 @@ function pathEvaluator.findSignalsInPath(path, lookAheadEdges, signalsToEvaluate
 
 	local blocks = {}
 	local presignalsForNextBlock = {}
+	local speedForNextBlock = {}
 
 	if path and path.path and #path.path.edges > 2 then
 		local pathStart = math.max(path.dyn.pathPos.edgeIndex, 1)
@@ -182,10 +183,11 @@ function pathEvaluator.findSignalsInPath(path, lookAheadEdges, signalsToEvaluate
 							hasSwitch = false,
 							isStation = false,
 							edgeEntityIdOn = edgeEntityId,
-							minSpeed = speed,
+							minSpeed = speedForNextBlock or speed,
 							presignalsEntityIds = presignalsForNextBlock
 						}
 						table.insert(blocks, signalInfo)
+						speedForNextBlock = nil
 						presignalsForNextBlock = {}
 					elseif pathEvaluator.isASignal(signal, potentialSignal.entity, main_signalObjects) then
 						-- Presignal/Hybrid in presignal state
@@ -200,6 +202,8 @@ function pathEvaluator.findSignalsInPath(path, lookAheadEdges, signalsToEvaluate
 							if values.speed then
 								blocks[#blocks].minSpeed = values.speed
 							end
+						else
+							speedForNextBlock = values.speed
 						end
 					end
 				end
