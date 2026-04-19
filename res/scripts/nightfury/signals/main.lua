@@ -14,10 +14,11 @@ local BETTER_SIGNAL_WAS_CHANGED = 2
 
 local signals = {}
 signals.signals = {}
--- Table holds all placed Signals
-signals.signalObjects = {}
+signals.signalObjects = {} -- Table holds all placed Signals
 signals.viewDistance = 2000
 signals.targetNoToEval = 4
+signals.deleteSignalsOnBulldoze = true
+
 signals.pos = {0,0} -- Updated by event
 signals.posRadius = 1000 -- Updated by event
 signals.cockpitMode = false
@@ -105,16 +106,13 @@ function signals.computeSignalPaths(trains, trainLocsEdgeIds)
 	local signalsToBeUpdated = {}
 
 	-- Compute signals in path of each train
-	for vehicleId, vehComp in pairs(trains) do
+	for vehicleId, _ in pairs(trains) do
 		utils.debugPrintVehicle(vehicleId)
-
-		local lineName = trainHelper.getLineNameOfVehicle(vehComp)
 		local signalsToEvaluate = signals.targetNoToEval
 
 		local signalPaths = pathEvaluator.evaluate(vehicleId, config_lookAheadEdges, signalsToEvaluate, trainLocsEdgeIds, signals.signalObjects, signals.signals)
 
 		for _, signalPath in ipairs(signalPaths) do
-			signalPath.lineName = lineName.name
 			signals.recordSignalToBeUpdated(signalPath, signalsToBeUpdated)
 		end
 	end
@@ -127,15 +125,20 @@ function signals.recordSignalToBeUpdated(signalPath, signalsToBeUpdated)
 		-- two trains want to update the same signal. Prioritise whichever train is closest to signal
 
 		local existingPath = signalsToBeUpdated[signalKey]
-		if existingPath.placeInPath > signalPath.placeInPath then
+		if existingPath.place_in_path > signalPath.place_in_path then
 			utils.debugPrint("existing replace", signalPath.entity)
 			signalsToBeUpdated[signalKey] = signalPath
-		elseif existingPath.placeInPath == signalPath.placeInPath then
-			-- when both have same place use whichever has green
-			utils.debugPrint("2 trains with same place in", signalPath.entity)
+		elseif existingPath.place_in_path == signalPath.place_in_path then
+			-- when both have same place use whichever has green, or which is closer to the signal
+			utils.debugPrint("2 trains with same place in ", signalPath.entity)
 			if existingPath.signal_state < signalPath.signal_state then
 				utils.debugPrint("existing replace", signalPath.entity)
 				signalsToBeUpdated[signalKey] = signalPath
+			elseif existingPath.signal_state == signalPath.signal_state then
+				if existingPath.dist_from_signal > signalPath.dist_from_signal then
+					utils.debugPrint("existing replace", signalPath.entity)
+					signalsToBeUpdated[signalKey] = signalPath
+				end
 			end
 		else
 			utils.debugPrint("existing remains")
@@ -152,28 +155,15 @@ function signals.updateConstructions(signalsToBeUpdated)
 			local newCheckSum = 0
 			for _, betterSignal in pairs(tableEntry.signals) do
 				signals.signalObjects[signalKey].changed = BETTER_SIGNAL_CHANGED
-				local conSignal = betterSignal.construction
-
-				if conSignal then
-					local oldConstruction = game.interface.getEntity(conSignal)
-					if oldConstruction and oldConstruction.params then
-						oldConstruction.params.previous_speed = signalPath.previous_speed
-						oldConstruction.params.signal_state = signalPath.signal_state
-						oldConstruction.params.signal_speed = signalPath.signal_speed
-						oldConstruction.params.following_signal = signalPath.following_signal
-						oldConstruction.params.paramsOverride = signalPath.paramsOverride
-						oldConstruction.params.showSpeedChange = true
-
-						if signalPath.lineName ~= "ERROR" then
-							oldConstruction.params.currentLine = signalPath.lineName
-						end
-
+				local conEntityId = betterSignal.construction
+				if conEntityId then
+					local proposedConstruction = utils.updateBetterSignalsParamsOnConstruction(conEntityId, signalPath)
+					if proposedConstruction then
 						newCheckSum = signalPath.checksum
 
 						if (not signals.signalObjects[signalKey].checksum) or (newCheckSum ~= signals.signalObjects[signalKey].checksum) then
-							utils.updateConstruction(oldConstruction, conSignal)
-							
-							utils.debugPrint("utils.updateConstruction for ", signalPath.entity, newCheckSum, signals.signalObjects[signalKey].checksum, signalPath.signal_state )
+							utils.updateConstruction(proposedConstruction, conEntityId)
+							utils.debugPrint("utils.updateConstruction for ", signalPath.entity,conEntityId, newCheckSum, signals.signalObjects[signalKey].checksum, signalPath.signal_state )
 						end
 					else
 						print("Couldn't access params")
@@ -204,6 +194,7 @@ function signals.throwSignalToRed()
 
 					oldConstruction.params.signal_state = 0
 					oldConstruction.params.previous_speed = nil
+					oldConstruction.params.following_signal = nil
 					utils.updateConstruction(oldConstruction, signal.construction)
 				end
 				value.changed = BETTER_SIGNAL_NO_CHANGE
@@ -237,7 +228,19 @@ function signals.createSignal(signal, construct, signalType, isAnimated)
 end
 
 function signals.removeSignalBySignal(signal)
+	local signalObj = signals.signalObjects["signal" .. signal]
 	signals.signalObjects["signal" .. signal] = nil
+
+	if signals.deleteSignalsOnBulldoze then
+		local constructionsToRemove = {}
+		if signalObj and signalObj.signals then
+			for _, signalVal in pairs(signalObj.signals) do
+				table.insert(constructionsToRemove, signalVal.construction)
+			end
+
+			utils.bulldozerConstructions(constructionsToRemove)
+		end
+	end
 end
 
 function signals.removeSignalByConstruction(construction)
