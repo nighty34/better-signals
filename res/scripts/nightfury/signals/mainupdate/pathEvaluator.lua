@@ -32,7 +32,8 @@ function pathEvaluator.evaluate(vehicleId,  lookAheadEdges, signalsToEvaluate, t
 	---@field dist_from_signal number -- Distance from the signal in number of edges
 	---@field showSpeedChange boolean -- Whether to show the speed change on the signal construction
 	---@field is_station boolean -- Whether this signal path is actually a station
-
+	---@field construction_params [table] -- Construction params for the signal constructions attached to this signal
+	
 	local res = {}
 	local signalPaths = {}
 
@@ -160,7 +161,7 @@ function pathEvaluator.createSignalPath(blocksInPath, idx, trainLocsEdgeEntityId
 		signalPath.paramsOverride = signalAndBlock.paramsOverride
 		signalPath.is_station = signalAndBlock.isStation
 		signalPath.showSpeedChange = true
-		signalPath.construction_params = pathEvaluator.getFirstConstructionParams(signalAndBlock.signalListEntityId, main_signalObjects)
+		signalPath.construction_params = pathEvaluator.getConstructionParams(signalAndBlock.signalListEntityId, main_signalObjects)
 
 		if #signalPaths > 0 then
 			local lastSignal = signalPaths[#signalPaths]
@@ -175,14 +176,18 @@ function pathEvaluator.createSignalPath(blocksInPath, idx, trainLocsEdgeEntityId
 		return signalPath
 end
 
-function pathEvaluator.getFirstConstructionParams(signalListEntityId, main_signalObjects)
+function pathEvaluator.getConstructionParams(signalListEntityId, main_signalObjects)
 	local constructionTable = main_signalObjects["signal" .. signalListEntityId]
+	local toReturn = {}
+
 	if constructionTable and constructionTable.signals and #constructionTable.signals > 0 then
-		local conSignalId = constructionTable.signals[1].construction
-		return utils.getStaticConstructionParams(conSignalId)
+		for _, value in pairs(constructionTable.signals) do
+			local conSignalId = value.construction
+			table.insert(toReturn, utils.getStaticConstructionParams(conSignalId))
+		end
 	end
 
-	return {}
+	return toReturn
 end
 
 ---First evaluation: We convert path into blocks protected by signals/end station
