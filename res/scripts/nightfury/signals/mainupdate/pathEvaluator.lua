@@ -497,7 +497,7 @@ function pathEvaluator.isHybridSignalInPreSignalState(signalListEntityId, main_s
 		local signalType = main_signals[signalObj.signalType]
 		local construction = utils.getComponentProtected(signalObj.construction, api.type.ComponentType.CONSTRUCTION)
 
-		if signalType.type == "hybrid" and construction then
+		if signalType and signalType.type and signalType.type == "hybrid" and construction then
 			local presignalConditionMatch = construction.params[signalType['preSignalTriggerKey']] == signalType['preSignalTriggerValue']
 			if presignalConditionMatch then
 				return true
