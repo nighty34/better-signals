@@ -33,9 +33,9 @@ function pathEvaluator.evaluate(vehicleId,  lookAheadEdges, signalsToEvaluate, t
 	---@field showSpeedChange boolean -- Whether to show the speed change on the signal construction
 	---@field is_station boolean -- Whether this signal path is actually a station
 	---@field construction_params [table] -- Construction params for the signal constructions attached to this signal
+	---@field gateway_next_main_signal SignalPath -- Reference to the next main signal for shunting signals
 	
 	local res = {}
-	local signalPaths = {}
 
 	local path = api.engine.getComponent(vehicleId, api.type.ComponentType.MOVE_PATH)
 	-- ignore stopped trains 
@@ -43,68 +43,102 @@ function pathEvaluator.evaluate(vehicleId,  lookAheadEdges, signalsToEvaluate, t
 		return res
 	end
 
-	---1st evaluation: We split path into blocks protected by signals/end station. Each block starts with a signal
-	local blocksInPath = pathEvaluator.findBlocksInPath(path,lookAheadEdges, signalsToEvaluate, main_signalObjects, main_signals)
-	local blockBehind = pathEvaluator.findBlockBackwards(path,lookAheadEdges, main_signalObjects, main_signals)
-	local lastSignalState = SIGNAL_STATE_RED
+	local function processPass(targetFuncType)
+		local signalPaths = {}
+		---1st evaluation: We split path into blocks protected by signals/end station. Each block starts with a signal
+		local blocksInPath = pathEvaluator.findBlocksInPath(path,lookAheadEdges, signalsToEvaluate, main_signalObjects, main_signals, targetFuncType)
+		local blockBehind = pathEvaluator.findBlockBackwards(path,lookAheadEdges, main_signalObjects, main_signals, targetFuncType)
+		local lastSignalState = SIGNAL_STATE_RED
 
-	-- 2nd evaluation: We determine signal states for each main signal and prepare to return as SignalPath
-	-- Order is important as we add information from previous and following signals to the current signal
-	for i = 1, #blocksInPath, 1 do
-		local nextSignalIsRedWaypoint = pathEvaluator.nextSignalIsRedWaypoint(blocksInPath, i)
-		local signalPath = pathEvaluator.createSignalPath(blocksInPath, i, trainLocsEdgeEntityIds, signalPaths, nextSignalIsRedWaypoint, main_signalObjects)
-		table.insert(signalPaths, signalPath)
+		-- 2nd evaluation: We determine signal states for each main signal and prepare to return as SignalPath
+		for i = 1, #blocksInPath, 1 do
+			local nextSignalIsRedWaypoint = pathEvaluator.nextSignalIsRedWaypoint(blocksInPath, i)
+			local signalPath = pathEvaluator.createSignalPath(blocksInPath, i, trainLocsEdgeEntityIds, signalPaths, nextSignalIsRedWaypoint, main_signalObjects)
+			table.insert(signalPaths, signalPath)
 
-		if signalPath.signal_state == SIGNAL_STATE_RED and (blocksInPath[i].hasSwitch or lastSignalState == SIGNAL_STATE_GREEN or nextSignalIsRedWaypoint) then
-			-- We stop early on this red because no point in evaluating beyond the switch or we've hit a red we can't safely evaluate after
-			-- Note we can't be efficent and just stop when we hit a red as the game tells us the train position with a lag from what is displayed on screen: so we may have multiple red signals before we get our first green signal
-			utils.debugPrint("stopping early")
-			break
+			if signalPath.signal_state == SIGNAL_STATE_RED and (blocksInPath[i].hasSwitch or lastSignalState == SIGNAL_STATE_GREEN or nextSignalIsRedWaypoint) then
+				utils.debugPrint("stopping early for " .. targetFuncType)
+				break
+			end
+
+			lastSignalState = signalPath.signal_state
 		end
-
-		lastSignalState = signalPath.signal_state
-	end
 
 		-- Evaluate signal behind train first so we can add info about it to the first main signal
-	if blockBehind and #blocksInPath > 0 then
-		-- The presignals on the block behind the train are actually for the first signal, copy over presignals to first block if it exists
-		for key, value in pairs(blockBehind.presignalsEntityIds) do
-			table.insert(blocksInPath[1].presignalsEntityIds, value)
-		end
-		signalPaths[1].previous_speed = blockBehind.minSpeed
-	end
-
-	-- 3rd evaluation create presignals between the main signals. We do this after the 2nd evaluation because 2nd sets following_signal, and previous_speed which we need
-	-- A presignal is just a copy of the main signal it's for
-	for i = 1, #signalPaths, 1 do
-		local signalPath = signalPaths[i]
-		local presignalsTable = blocksInPath[i].presignalsEntityIds
-
-		-- Create presignals
-		for _, entityId in pairs(presignalsTable) do
-			local preSignalTable = utils.deepCopy(signalPath)
-			preSignalTable.entity = entityId
-
-			utils.debugPrint("Pre signal at ", blocksInPath[i].edgeEntityIdOn, preSignalTable.entity, preSignalTable.signal_state, preSignalTable.signal_speed, preSignalTable.hasSwitch, utils.dictToString(signalPath.paramsOverride))
-			table.insert(res, preSignalTable)
+		if blockBehind and #blocksInPath > 0 then
+			for key, value in pairs(blockBehind.presignalsEntityIds) do
+				table.insert(blocksInPath[1].presignalsEntityIds, value)
+			end
+			signalPaths[1].previous_speed = blockBehind.minSpeed
 		end
 
-		-- Don't forget to add in the main signal
-		utils.debugPrint("Main signal at ", blocksInPath[i].edgeEntityIdOn, signalPath.entity, signalPath.signal_state, signalPath.signal_speed, blocksInPath[i].hasSwitch, utils.dictToString(signalPath.paramsOverride), signalPath.place_in_path)
-		table.insert(res, signalPath)
+		-- 3rd evaluation create presignals between the main signals.
+		local passRes = {}
+		for i = 1, #signalPaths, 1 do
+			local signalPath = signalPaths[i]
+			local presignalsTable = blocksInPath[i].presignalsEntityIds
+
+			for _, entityId in pairs(presignalsTable) do
+				local preSignalTable = utils.deepCopy(signalPath)
+				preSignalTable.entity = entityId
+				table.insert(passRes, preSignalTable)
+			end
+			table.insert(passRes, signalPath)
+		end
+
+		if blockBehind and #signalPaths > 0 then
+			local behindTrainSignalPath = pathEvaluator.createSignalPathForBlockBehindTrain(blockBehind, signalPaths[1])
+			if behindTrainSignalPath.signal_state == SIGNAL_STATE_RED then
+				table.insert(passRes, 1, behindTrainSignalPath)
+			end
+		end
+
+		return passRes, signalPaths
 	end
 
-	-- We now add in the signal behind the train as well (if it's not green)
-	if blockBehind and #signalPaths > 0 then
-		local behindTrainSignalPath = pathEvaluator.createSignalPathForBlockBehindTrain(blockBehind, signalPaths[1])
-		if behindTrainSignalPath.signal_state == SIGNAL_STATE_RED then
-			utils.debugPrint("Adding Signal behind train to start of path ", blockBehind.edgeEntityIdOn, behindTrainSignalPath.entity, behindTrainSignalPath.signal_state, behindTrainSignalPath.signal_speed, blockBehind.hasSwitch, utils.dictToString(behindTrainSignalPath.paramsOverride))
-			table.insert(res, 1, behindTrainSignalPath)
+	local resMain, signalPathsMain = processPass("main")
+	local resShunting, signalPathsShunting = processPass("shunting")
+
+	-- Gateway logic: Link the last shunting signal in a chain to the next main signal
+	for _, shPath in ipairs(signalPathsShunting) do
+		if not shPath.is_station then
+			local nextMain = nil
+			for _, mPath in ipairs(signalPathsMain) do
+				if not mPath.is_station and mPath.dist_from_signal > shPath.dist_from_signal then
+					nextMain = mPath
+					break
+				end
+			end
+			
+			if nextMain then
+				local nextShuntingDist = shPath.following_signal and shPath.following_signal.dist_from_signal or math.huge
+				if nextMain.dist_from_signal < nextShuntingDist then
+					-- We only pass a stripped down version of the next main signal to avoid infinite recursion/deep copying issues
+					shPath.gateway_next_main_signal = {
+						entity = nextMain.entity,
+						signal_state = nextMain.signal_state,
+						signal_speed = nextMain.signal_speed,
+						dist_from_signal = nextMain.dist_from_signal,
+						is_station = nextMain.is_station
+					}
+				end
+			end
 		end
 	end
 
-	-- 4th evaluation: calc checksums. We do in reverse order to include following signal in checksum
-	utils.addChecksumToSignals(res)
+	-- 4th evaluation: calc checksums independently to avoid interference between the two systems
+	utils.addChecksumToSignals(resMain)
+	utils.addChecksumToSignals(resShunting)
+
+	-- Add gateway state to shunting checksum so shunting signals update if the gateway main signal changes state
+	for _, shRes in ipairs(resShunting) do
+		if shRes.gateway_next_main_signal then
+			shRes.checksum = shRes.checksum + (shRes.gateway_next_main_signal.signal_state * 13)
+		end
+	end
+
+	for _, pRes in ipairs(resMain) do table.insert(res, pRes) end
+	for _, pRes in ipairs(resShunting) do table.insert(res, pRes) end
 
 	return res
 end
@@ -197,7 +231,7 @@ end
 ---@param main_signalObjects any -- signals.signalObjects
 ---@param main_signals any -- signals.signals
 ---@return [BlockInfo]
-function pathEvaluator.findBlocksInPath(path, lookAheadEdges, signalsToEvaluate, main_signalObjects, main_signals)
+function pathEvaluator.findBlocksInPath(path, lookAheadEdges, signalsToEvaluate, main_signalObjects, main_signals, targetFuncType)
 	---@class BlockInfo Represents a block of track with a signal or a station
 	---@field edges table<number> nil when isStation is true
 	---@field signalComp any
@@ -257,33 +291,40 @@ function pathEvaluator.findBlocksInPath(path, lookAheadEdges, signalsToEvaluate,
 				if signalComponent and signalComponent.signals and #signalComponent.signals > 0 then
 					local signal = signalComponent.signals[1]
 
-					if pathEvaluator.isMainSignal(signal, potentialSignal.entity, main_signalObjects, main_signals) then
-						local signalInfo = {
-							edges = {},
-							signalComp = signalComponent,
-							signalListEntityId = potentialSignal.entity,
-							hasSwitch = false,
-							isStation = false,
-							edgeEntityIdOn = edgeEntityId,
-							minSpeed = speed,
-							presignalsEntityIds = presignalsForNextBlock,
-							edgeDistCount = pathIndex - pathStart
-						}
-						table.insert(blocks, signalInfo)
-						presignalsForNextBlock = {}
-					elseif pathEvaluator.isASignal(signal, potentialSignal.entity, main_signalObjects) then
-						-- Presignal/Hybrid in presignal state
-						table.insert(presignalsForNextBlock, potentialSignal.entity)
-					elseif signal.type == SIGNAL_WAYPOINT then
-						-- Params override
-						local name = utils.getComponentProtected(potentialSignal.entity, 63)
-						local values = pathEvaluator.parseName(string.gsub(name.name, " ", ""))
-						
-						if #blocks > 0 then
-							blocks[#blocks].paramsOverride = values
-							if values.speed then
-								blocks[#blocks].minSpeed = values.speed
+					if not pathEvaluator.isASignal(signal, potentialSignal.entity, main_signalObjects) then
+						if signal.type == SIGNAL_WAYPOINT then
+							-- Params override
+							local name = utils.getComponentProtected(potentialSignal.entity, 63)
+							local values = pathEvaluator.parseName(string.gsub(name.name, " ", ""))
+							
+							if #blocks > 0 then
+								blocks[#blocks].paramsOverride = values
+								if values.speed then
+									blocks[#blocks].minSpeed = values.speed
+								end
 							end
+						end
+					else
+						local sFuncType = pathEvaluator.getSignalFunctionalType(potentialSignal.entity, main_signalObjects, main_signals)
+						
+						if sFuncType == targetFuncType then
+							local signalInfo = {
+								edges = {},
+								signalComp = signalComponent,
+								signalListEntityId = potentialSignal.entity,
+								hasSwitch = false,
+								isStation = false,
+								edgeEntityIdOn = edgeEntityId,
+								minSpeed = speed,
+								presignalsEntityIds = presignalsForNextBlock,
+								edgeDistCount = pathIndex - pathStart
+							}
+							table.insert(blocks, signalInfo)
+							presignalsForNextBlock = {}
+						elseif sFuncType == "pre" and targetFuncType == "main" then
+							table.insert(presignalsForNextBlock, potentialSignal.entity)
+						elseif sFuncType == "pre_shunting" and targetFuncType == "shunting" then
+							table.insert(presignalsForNextBlock, potentialSignal.entity)
 						end
 					end
 				end
@@ -309,7 +350,7 @@ end
 ---@param main_signalObjects any -- signals.signalObjects
 ---@param main_signals any -- signals.signals
 ---@return BlockInfo | nil
-function pathEvaluator.findBlockBackwards(path, lookAheadEdges, main_signalObjects, main_signals)
+function pathEvaluator.findBlockBackwards(path, lookAheadEdges, main_signalObjects, main_signals, targetFuncType)
 
 	if path and path.path and #path.path.edges > 2 then
 		local startPoint = math.max(path.dyn.pathPos.edgeIndex -1, 1) -- Train location
@@ -340,31 +381,38 @@ function pathEvaluator.findBlockBackwards(path, lookAheadEdges, main_signalObjec
 				if signalComponent and signalComponent.signals and #signalComponent.signals > 0 then
 					local signal = signalComponent.signals[1]
 
-					if pathEvaluator.isMainSignal(signal, potentialSignal.entity, main_signalObjects, main_signals) then
-						return {
-							edges = {}, -- Don't need to set edges
-							signalComp = signalComponent,
-							signalListEntityId = potentialSignal.entity,
-							hasSwitch = false,
-							isStation = false,
-							edgeEntityIdOn = edgeEntityId,
-							minSpeed = blockMinSpeed,
-							presignalsEntityIds = presignalsForFirstBlock,
-							paramsOverride = paramsOverride,
-							edgeDistCount = 0
-						}
-					elseif pathEvaluator.isASignal(signal, potentialSignal.entity, main_signalObjects) then
-						-- Presignal/Hybrid in presignal state
-						table.insert(presignalsForFirstBlock, potentialSignal.entity)
-					elseif signal.type == SIGNAL_WAYPOINT then
-						-- Params override
-						local name = utils.getComponentProtected(potentialSignal.entity, 63)
-						local values = pathEvaluator.parseName(string.gsub(name.name, " ", ""))
+					if not pathEvaluator.isASignal(signal, potentialSignal.entity, main_signalObjects) then
+						if signal.type == SIGNAL_WAYPOINT then
+							-- Params override
+							local name = utils.getComponentProtected(potentialSignal.entity, 63)
+							local values = pathEvaluator.parseName(string.gsub(name.name, " ", ""))
 
-						paramsOverride = values
-						if values.speed then
-							speedOverriden = true
-							blockMinSpeed = values.speed
+							paramsOverride = values
+							if values.speed then
+								speedOverriden = true
+								blockMinSpeed = values.speed
+							end
+						end
+					else
+						local sFuncType = pathEvaluator.getSignalFunctionalType(potentialSignal.entity, main_signalObjects, main_signals)
+
+						if sFuncType == targetFuncType then
+							return {
+								edges = {}, -- Don't need to set edges
+								signalComp = signalComponent,
+								signalListEntityId = potentialSignal.entity,
+								hasSwitch = false,
+								isStation = false,
+								edgeEntityIdOn = edgeEntityId,
+								minSpeed = blockMinSpeed,
+								presignalsEntityIds = presignalsForFirstBlock,
+								paramsOverride = paramsOverride,
+								edgeDistCount = 0
+							}
+						elseif sFuncType == "pre" and targetFuncType == "main" then
+							table.insert(presignalsForFirstBlock, potentialSignal.entity)
+						elseif sFuncType == "pre_shunting" and targetFuncType == "shunting" then
+							table.insert(presignalsForFirstBlock, potentialSignal.entity)
 						end
 					end
 				end
@@ -482,29 +530,39 @@ function pathEvaluator.hasTrainInPath(edgesTable, trainLocsEdgeIds)
 	return false
 end
 
-function pathEvaluator.isMainSignal(signal, signalListEntityId, main_signalObjects, main_signals)
-	if pathEvaluator.isHybridSignalInPreSignalState(signalListEntityId, main_signalObjects, main_signals) then
-		return false
-	end
-
-	return pathEvaluator.isASignal(signal, signalListEntityId, main_signalObjects)
-end
-
-function pathEvaluator.isHybridSignalInPreSignalState(signalListEntityId, main_signalObjects,main_signals)
+function pathEvaluator.getSignalFunctionalType(signalListEntityId, main_signalObjects, main_signals)
 	local signalKey = "signal" .. signalListEntityId
 	local signalObj = main_signalObjects[signalKey]
 	if signalObj then
-		local signalType = main_signals[signalObj.signalType]
+		local signalTypeConfig = main_signals[signalObj.signalType]
 		local construction = utils.getComponentProtected(signalObj.construction, api.type.ComponentType.CONSTRUCTION)
 
-		if signalType and signalType.type and signalType.type == "hybrid" and construction then
-			local presignalConditionMatch = construction.params[signalType['preSignalTriggerKey']] == signalType['preSignalTriggerValue']
-			if presignalConditionMatch then
-				return true
+		if signalTypeConfig and construction then
+			if signalTypeConfig.type == "hybrid" then
+				if signalTypeConfig.preSignalTriggerKey and construction.params[signalTypeConfig.preSignalTriggerKey] == signalTypeConfig.preSignalTriggerValue then
+					return "pre"
+				elseif signalTypeConfig.shuntingTriggerKey and construction.params[signalTypeConfig.shuntingTriggerKey] == signalTypeConfig.shuntingTriggerValue then
+					return "shunting"
+				else
+					return "main"
+				end
+			elseif signalTypeConfig.type == "shunting" then
+				return "shunting"
+			elseif signalTypeConfig.type == "pre" then
+				return "pre"
+			else
+				return "main"
 			end
 		end
 	end
-	return false
+	return "main"
+end
+
+function pathEvaluator.isMainSignal(signal, signalListEntityId, main_signalObjects, main_signals)
+	if not pathEvaluator.isASignal(signal, signalListEntityId, main_signalObjects) then
+		return false
+	end
+	return pathEvaluator.getSignalFunctionalType(signalListEntityId, main_signalObjects, main_signals) == "main"
 end
 
 function pathEvaluator.isASignal(signal, signalListEntityId, main_signalObjects)
