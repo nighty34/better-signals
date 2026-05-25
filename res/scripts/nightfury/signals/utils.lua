@@ -217,6 +217,8 @@ local betterSignalsApiProperties = {
 	following_signal = true,
 	paramsOverride = true,
 	showSpeedChange = true,
+	gateway_next_main_signal = true,
+	misc_observed_main_signal = true,   -- Misc (observer) signals: reference to the next main signal
 }
 
 function utils.getStaticConstructionParams(constructionId)
