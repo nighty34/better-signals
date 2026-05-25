@@ -126,9 +126,13 @@ function pathEvaluator.evaluate(vehicleId,  lookAheadEdges, signalsToEvaluate, t
 		end
 	end
 
-	-- 4th evaluation: calc checksums independently to avoid interference between the two systems
+	-- Misc pass: independent observers that telescope to the next main signal
+	local resMisc = pathEvaluator.processMiscPass(path, lookAheadEdges, main_signalObjects, main_signals, signalPathsMain)
+
+	-- 4th evaluation: calc checksums independently to avoid interference between the systems
 	utils.addChecksumToSignals(resMain)
 	utils.addChecksumToSignals(resShunting)
+	utils.addChecksumToSignals(resMisc)
 
 	-- Add gateway state to shunting checksum so shunting signals update if the gateway main signal changes state
 	for _, shRes in ipairs(resShunting) do
@@ -137,8 +141,16 @@ function pathEvaluator.evaluate(vehicleId,  lookAheadEdges, signalsToEvaluate, t
 		end
 	end
 
+	-- Add observed main state to misc checksum so misc signals update when the watched main changes
+	for _, miscRes in ipairs(resMisc) do
+		if miscRes.misc_observed_main_signal then
+			miscRes.checksum = miscRes.checksum + (miscRes.misc_observed_main_signal.signal_state * 17)
+		end
+	end
+
 	for _, pRes in ipairs(resMain) do table.insert(res, pRes) end
 	for _, pRes in ipairs(resShunting) do table.insert(res, pRes) end
+	for _, pRes in ipairs(resMisc) do table.insert(res, pRes) end
 
 	return res
 end
@@ -307,7 +319,10 @@ function pathEvaluator.findBlocksInPath(path, lookAheadEdges, signalsToEvaluate,
 					else
 						local sFuncType = pathEvaluator.getSignalFunctionalType(potentialSignal.entity, main_signalObjects, main_signals)
 						
-						if sFuncType == targetFuncType then
+						-- "misc" signals are completely invisible to main and shunting layers
+						if sFuncType == "misc" then
+							-- skip silently: no block, no presignal, no paramsOverride
+						elseif sFuncType == targetFuncType then
 							local signalInfo = {
 								edges = {},
 								signalComp = signalComponent,
@@ -396,7 +411,10 @@ function pathEvaluator.findBlockBackwards(path, lookAheadEdges, main_signalObjec
 					else
 						local sFuncType = pathEvaluator.getSignalFunctionalType(potentialSignal.entity, main_signalObjects, main_signals)
 
-						if sFuncType == targetFuncType then
+						-- "misc" signals are completely invisible to main and shunting layers (backwards scan too)
+						if sFuncType == "misc" then
+							-- skip silently
+						elseif sFuncType == targetFuncType then
 							return {
 								edges = {}, -- Don't need to set edges
 								signalComp = signalComponent,
@@ -543,6 +561,8 @@ function pathEvaluator.getSignalFunctionalType(signalListEntityId, main_signalOb
 					return "pre"
 				elseif signalTypeConfig.shuntingTriggerKey and construction.params[signalTypeConfig.shuntingTriggerKey] == signalTypeConfig.shuntingTriggerValue then
 					return "shunting"
+				elseif signalTypeConfig.miscTriggerKey and construction.params[signalTypeConfig.miscTriggerKey] == signalTypeConfig.miscTriggerValue then
+					return "misc"
 				else
 					return "main"
 				end
@@ -550,6 +570,8 @@ function pathEvaluator.getSignalFunctionalType(signalListEntityId, main_signalOb
 				return "shunting"
 			elseif signalTypeConfig.type == "pre" then
 				return "pre"
+			elseif signalTypeConfig.type == "misc" then
+				return "misc"
 			else
 				return "main"
 			end
@@ -596,6 +618,134 @@ function pathEvaluator.parseName(input)
 		end
 
     return result
+end
+
+---Misc pass: evaluate all "misc" signals on the train's path.
+---Misc signals receive a deepCopy of the next main signal's SignalPath (like pre-signals),
+---but use the RAW game state to avoid promoting red signals to green.
+---@param path any
+---@param lookAheadEdges any
+---@param main_signalObjects any
+---@param main_signals any
+---@param signalPathsMain [SignalPath]
+---@return [SignalPath]
+function pathEvaluator.processMiscPass(path, lookAheadEdges, main_signalObjects, main_signals, signalPathsMain)
+	local resMisc = {}
+
+	if not (path and path.path and #path.path.edges > 2) then
+		return resMisc
+	end
+
+	local pathStart = math.max(path.dyn.pathPos.edgeIndex, 1)
+	local pathEnd   = math.min(#path.path.edges, pathStart + lookAheadEdges)
+
+	-- Walk every edge looking for misc signals
+	for pathIndex = pathStart, pathEnd do
+		local currentEdge = path.path.edges[pathIndex]
+
+		local potentialSignal = api.engine.system.signalSystem.getSignal(currentEdge.edgeId, currentEdge.dir)
+		if potentialSignal and potentialSignal.entity and potentialSignal.entity ~= -1 then
+			local signalComponent = api.engine.getComponent(potentialSignal.entity, api.type.ComponentType.SIGNAL_LIST)
+			if signalComponent and signalComponent.signals and #signalComponent.signals > 0 then
+				local signal = signalComponent.signals[1]
+
+				if pathEvaluator.isASignal(signal, potentialSignal.entity, main_signalObjects) then
+					local sFuncType = pathEvaluator.getSignalFunctionalType(potentialSignal.entity, main_signalObjects, main_signals)
+
+					if sFuncType == "misc" then
+						local miscEdgeDist = pathIndex - pathStart
+
+						-- Find the next main signal in signalPathsMain (beyond the misc signal position).
+						-- We use signalPathsMain because it already has correct following_signal chains
+						-- and paramsOverride set from waypoints, exactly like the pre-signal system.
+						local observedMainPath = nil
+						for _, mPath in ipairs(signalPathsMain) do
+							if not mPath.is_station and mPath.dist_from_signal > miscEdgeDist then
+								observedMainPath = mPath
+								break
+							end
+						end
+
+						-- If signalPathsMain didn't cover far enough, direct scan for raw state
+						local rawState = nil
+						if observedMainPath == nil then
+							for scanIdx = pathIndex + 1, pathEnd do
+								local scanEdge = path.path.edges[scanIdx]
+								local scanSig  = api.engine.system.signalSystem.getSignal(scanEdge.edgeId, scanEdge.dir)
+								if scanSig and scanSig.entity and scanSig.entity ~= -1 then
+									local scanComp = api.engine.getComponent(scanSig.entity, api.type.ComponentType.SIGNAL_LIST)
+									if scanComp and scanComp.signals and #scanComp.signals > 0 then
+										local scanSignal = scanComp.signals[1]
+										if pathEvaluator.isASignal(scanSignal, scanSig.entity, main_signalObjects) then
+											local fType = pathEvaluator.getSignalFunctionalType(scanSig.entity, main_signalObjects, main_signals)
+											if fType == "main" then
+												rawState = scanSignal.state
+												-- Build a minimal fallback path
+												observedMainPath = { entity = scanSig.entity, signal_state = rawState, signal_speed = 600, dist_from_signal = miscEdgeDist + 1, is_station = false }
+												break
+											end
+										end
+									end
+								end
+							end
+						end
+
+						local miscSignalPath
+						if observedMainPath then
+							-- Replicate pre-signal: deepCopy the main signal's path, override entity.
+							-- This gives misc signals the same params.following_signal chain,
+							-- including following_signal.paramsOverride (waypoints in the next block).
+							miscSignalPath = utils.deepCopy(observedMainPath)
+							miscSignalPath.entity           = potentialSignal.entity
+							miscSignalPath.place_in_path    = miscEdgeDist
+							miscSignalPath.dist_from_signal = miscEdgeDist
+							miscSignalPath.showSpeedChange  = false
+							-- Use RAW game state to avoid red→green promotion
+							if rawState ~= nil then
+								miscSignalPath.signal_state = rawState
+							else
+								-- Get raw state from game for the observed main signal
+								local rawComp = api.engine.getComponent(observedMainPath.entity, api.type.ComponentType.SIGNAL_LIST)
+								if rawComp and rawComp.signals and #rawComp.signals > 0 then
+									miscSignalPath.signal_state = rawComp.signals[1].state
+								end
+							end
+							-- following_signal = Signal A (the observed main) WITH its own paramsOverride.
+							-- Layout: [TIV-D] → [Signal A] → [Waypoint tivm=1]
+							-- The waypoint after A sets block A's paramsOverride = {tivm=1}.
+							-- The .con reads params.following_signal.paramsOverride.tivm,
+							-- so following_signal must BE Signal A (not Signal A's following_signal).
+							miscSignalPath.following_signal = {
+								entity         = observedMainPath.entity,
+								signal_state   = miscSignalPath.signal_state,
+								signal_speed   = observedMainPath.signal_speed,
+								paramsOverride = observedMainPath.paramsOverride,
+								is_station     = false,
+							}
+							miscSignalPath.misc_observed_main_signal = miscSignalPath.following_signal
+						else
+							-- No main signal visible — default open
+							miscSignalPath = {
+								entity                   = potentialSignal.entity,
+								signal_state             = SIGNAL_STATE_GREEN,
+								signal_speed             = 600,
+								is_station               = false,
+								showSpeedChange          = false,
+								place_in_path            = miscEdgeDist,
+								dist_from_signal         = miscEdgeDist,
+								misc_observed_main_signal = nil,
+							}
+						end
+
+						miscSignalPath.construction_params = pathEvaluator.getConstructionParams(potentialSignal.entity, main_signalObjects)
+						table.insert(resMisc, miscSignalPath)
+					end
+				end
+			end
+		end
+	end
+
+	return resMisc
 end
 
 return pathEvaluator
